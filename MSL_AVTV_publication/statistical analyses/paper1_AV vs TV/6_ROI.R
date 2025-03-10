@@ -1,21 +1,11 @@
 ##########################################################
-##                        PREPARE                       ##
-##########################################################
-## Description :: 
-## Input :::::::: 
-## Libraries :::: 
-## Output ::::::: 
+##                    ROI ANAlyses                      ##
 ##########################################################
 
 # Load and merge data ------------------------------------
 ##########################################################
 load(file.path(outputFolder, "demo.RData"))
-#load(file.path(outputFolder, "modelSelection.RData"))
-modellingOuput <- read_csv(file.path(outputFolder, "modelling", "modellingOuputfMRI_adults.csv"))
-# -> need the summary
-modellingOuputAdults <- read_csv(file.path(outputFolder, "modelling", "modellingOuputfMRI.csv"))
-# -> need the summary
-
+load(file.path(outputFolder, "modelSelection.RData"))
 
 files <- list.files(file.path(inputFolder, 'ROI')) %>% 
   discard(str_detect(.,'extracedBetas.csv'))
@@ -77,8 +67,8 @@ betasSubMS <- extractedBetaslong %>%
   group_by(ID, mask, modality, label, hemisphere, age, learningRate) %>% 
   summarise(betaValues = mean(betaValues))
 
-min(betasSubMS$betaValues) # -2.849
-max(betasSubMS$betaValues) # 9.624
+MSImin <- floor(min(betasSubMS$betaValues)) # -2.849
+MSImax <- ceiling(max(betasSubMS$betaValues)) # 9.624
 
 betasMS <- extractedBetaslong %>% 
   filter(mask == "MSTACT_uniform",
@@ -91,8 +81,8 @@ betasSubPE <- extractedBetaslong %>%
   group_by(ID, mask, modality, label, hemisphere, age, learningRate) %>% 
   summarise(betaValues = mean(betaValues))
 
-min(betasSubPE$betaValues) # -8.121
-max(betasSubPE$betaValues) # 5.689
+PEmin <- floor(min(betasSubPE$betaValues)) # -8.121
+PEmax <- ceiling(max(betasSubPE$betaValues)) # 5.689
 
 betasPE <- extractedBetaslong %>% 
   filter(mask == "PE_uniform",
@@ -105,8 +95,8 @@ betasSubVAL <- extractedBetaslong %>%
   group_by(ID, mask, modality, label, hemisphere, age, learningRate) %>% 
   summarise(betaValues = mean(betaValues))
 
-min(betasSubVAL$betaValues) # -180.406
-max(betasSubVAL$betaValues) # 236.328
+VALmin <- floor(min(betasSubVAL$betaValues)) # -180.406
+VALmax <- ceiling(max(betasSubVAL$betaValues)) # 236.328
 
 betasVAL <- extractedBetaslong %>% 
   filter(mask == "VAL_uniform",
@@ -117,7 +107,6 @@ p_values <- c()
 combined_anovas <- tibble()
 
 stimLM2 <- lmer(betaValues ~ modality * age + learningRate + (1|ID), betasMS)
-#lmerTest::step(lmer(betaValues ~ modality * age * learningRate + (1|ID), betasMS))
 
 summary(stimLM2)
 anova(stimLM2)
@@ -129,49 +118,45 @@ report(stimLM2)
 
 p_values <- c(p_values, summary(stimLM2)$coefficients[,"Pr(>|t|)"]) 
 
-# fitted vs residual with smooth line added
-# plot(stimLM2, type=c("p","smooth"), col.line=1)
-# scale-location plot
-# plot(stimLM2,
-#      sqrt(abs(resid(.)))~fitted(.),
-#      type=c("p","smooth"), col.line=1)
-# Q-Q plot
-# lattice::qqmath(stimLM2)
-# residuals vs leverage
-# plot(stimLM2, rstudent(.) ~ hatvalues(.))
-# car::influencePlot(stimLM2)
-
 lmTable <- nice_table(as.data.frame(report_table(stimLM2)),
                       title = 'Linear Mixed Model for Learning Rate and Modality', note = 'ABC', 
-                      #col.format.custom = c(2:6, 11:13), format.custom = 'fun',
                       highlight = T)
 lmTable
-print(lmTable, preview = 'docx')
 
-ggplot(betasMS, aes(age, betaValues, colour=modality, group=modality)) +
-  geom_point() +
-  geom_smooth(method='lm', aes(linetype = modality)) +
+ggplot(betasMS, aes(age, betaValues, colour=modality, group=modality, linetype = modality)) +
+  geom_point(alpha=0.6) +
+  geom_smooth(method='lm', linewidth = 1.2) +
+  scale_linetype_manual(values=c("longdash", "dotdash")) +
   scale_color_manual(values = viridis(n=2, begin = 0.2, end = 0.8)) +
-  #ggtitle('Multisensory Regions during Stimulus Presentation') +
-  ylab("Beta Values") +
-  jtools::theme_apa(remove.y.gridlines = F) + scale_y_continuous(expand = c(0, 0)) +
-  theme(text = element_text(size = 25))
+  ggtitle('Multisensory network ROI') +
+  ylab("beta values") +
+  annotate("text", label = "paste('age ', italic(p), ' = .006**')",
+           parse = TRUE, x = 5.8, y = 9.8,
+           hjust = 0, vjust = 1, color = "blue", size = 7.5) +
+  annotate("text", label = "paste('age × modality ', italic(p), ' = .039*')",
+           parse = TRUE, x = 5.8, y = 8.0,
+           hjust = 0, vjust = 1, color = "blue", size = 7.5) +
+  jtools::theme_apa(remove.y.gridlines = F) + scale_y_continuous(expand = c(0, 0), limits = c(MSImin, MSImax)) +
+  theme(#text = element_text(size = 25),  # Increases all text
+    axis.title.y = element_text(size = 22), # Axis titles
+    axis.title.x = element_text(size = 22), # Axis titles
+    axis.text.y = element_text(size = 20), # Axis titles
+    axis.text.x = element_text(size = 20), # Axis titles
+    legend.text = element_text(size = 22),  # Legend text
+    strip.text.x = element_text(size=22),
+    plot.title = element_text(size=22),
+    legend.position = "none"
+  ) 
 
 ggsave(file.path(outputFolder, 'figures', 'ROIstimBetaMSI.png'),
        height = 15, width = 24, units = "cm")
-
-ggplot(betasSubMS, aes(age, betaValues, colour=modality, group=modality)) +
-  geom_point() +
-  geom_smooth(method='lm') +
-  facet_wrap(~label) +
-  ggtitle('Multisensory Regions during Stimulus Presentation') +
-  jtools::theme_apa(remove.y.gridlines = F) + scale_y_continuous(expand = c(0, 0)) +
-  theme(text = element_text(size = 20))
+ggsave(file.path(outputFolder, 'figures', 'ROIstimBetaMSI.svg'),
+       height = 8, width = 12.8, units = "cm")
+ggsave(file.path(outputFolder, 'figures', 'ROIstimBetaMSI.tif'),
+       height = 8, width = 12.8, units = "cm")
 
 ## effects in subclusters ---
 # -----------------------------
-# p = 0.05/13 = 0.003846154
-# p = 0.05/14 = 0.003571429
 # anterior insula left 
 betasSubMS1 <- betasSubMS %>% 
   filter(label == "anterior insula", hemisphere == "left")
@@ -188,18 +173,14 @@ p_values <- c(p_values, summary(stimSubLM)$coefficients[,"Pr(>|t|)"])
 
 lmTable <- nice_table(as.data.frame(report_table(stimSubLM)),
                       title = 'Anterior Insula left', note = 'ABC', 
-                      #col.format.custom = c(2:6, 11:13), format.custom = 'fun',
                       highlight = T)
 lmTable
-print(lmTable, preview = 'docx')
 
 lAI <- ggplot(betasSubMS1, aes(age, betaValues, colour=modality, group=modality)) +
   geom_point(alpha=0.6) +
-  geom_smooth(method='lm', aes(linetype = modality)) +
-  scale_color_manual(values = viridis(n=2, begin = 0.2, end = 0.8)) +
-  ggtitle('Left Anterior Insula') +
-  jtools::theme_apa(remove.y.gridlines = F) + scale_y_continuous(expand = c(0, 0), limits = c(-3, 10)) +
-  theme(text = element_text(size = 20))
+  geom_smooth(method='lm', aes(linetype = modality), linewidth = 1.2) +
+  ggtitle('Left anterior insula') +
+  scale_color_manual(values = viridis(n=2, begin = 0.2, end = 0.8)) 
 lAI
 
 #right
@@ -218,16 +199,14 @@ p_values <- c(p_values, summary(stimSubLM)$coefficients[,"Pr(>|t|)"])
 
 lmTable <- nice_table(as.data.frame(report_table(stimSubLM)),
                       title = 'Anterior Insula right', note = 'ABC', 
-                      #col.format.custom = c(2:6, 11:13), format.custom = 'fun',
                       highlight = T)
 lmTable
-print(lmTable, preview = 'docx')
 
 rAI <- ggplot(betasSubMS1, aes(age, betaValues, colour=modality, group=modality)) +
   geom_point(alpha=0.6) +
-  geom_smooth(method='lm', aes(linetype = modality)) +
+  geom_smooth(method='lm', aes(linetype = modality), linewidth = 1.2) +
   scale_color_manual(values = viridis(n=2, begin = 0.2, end = 0.8)) +
-  ggtitle('Right Anterior Insula') + ylim(-2.5,12) +
+  ggtitle('Right anterior insula') + 
   jtools::theme_apa(remove.y.gridlines = F) + scale_y_continuous(expand = c(0, 0), limits = c(-3, 10)) +
   theme(text = element_text(size = 20))
 rAI
@@ -248,16 +227,14 @@ p_values <- c(p_values, summary(stimSubLM)$coefficients[,"Pr(>|t|)"])
 
 lmTable <- nice_table(as.data.frame(report_table(stimSubLM)),
                       title = 'Inferior Occipital Cortex left', note = 'ABC', 
-                      #col.format.custom = c(2:6, 11:13), format.custom = 'fun',
                       highlight = T)
 lmTable
-print(lmTable, preview = 'docx')
 
 lIOC <- ggplot(betasSubMS1, aes(age, betaValues, colour=modality, group=modality)) +
   geom_point(alpha=0.6) +
-  geom_smooth(method='lm', aes(linetype = modality)) +
+  geom_smooth(method='lm', aes(linetype = modality), linewidth = 1.2) +
   scale_color_manual(values = viridis(n=2, begin = 0.2, end = 0.8)) +
-  ggtitle('Left Inferior Occipital Cortex') + ylim(-2.5,12) +
+  ggtitle('Left inf. cccipital cortex') + 
   jtools::theme_apa(remove.y.gridlines = F) + scale_y_continuous(expand = c(0, 0), limits = c(-3, 10)) +
   theme(text = element_text(size = 20))
 lIOC 
@@ -278,16 +255,14 @@ p_values <- c(p_values, summary(stimSubLM)$coefficients[,"Pr(>|t|)"])
 
 lmTable <- nice_table(as.data.frame(report_table(stimSubLM)),
                       title = 'Inferior Occipital Cortex right', note = 'ABC', 
-                      #col.format.custom = c(2:6, 11:13), format.custom = 'fun',
                       highlight = T)
 lmTable
-print(lmTable, preview = 'docx')
 
 rIOC <- ggplot(betasSubMS1, aes(age, betaValues, colour=modality, group=modality)) +
   geom_point(alpha=0.6) +
-  geom_smooth(method='lm', aes(linetype = modality)) +
+  geom_smooth(method='lm', aes(linetype = modality), linewidth = 1.2) +
   scale_color_manual(values = viridis(n=2, begin = 0.2, end = 0.8)) +
-  ggtitle('Right Inferior Occipital Cortex') +
+  ggtitle('Right inf. occipital cortex') +
   jtools::theme_apa(remove.y.gridlines = F) + scale_y_continuous(expand = c(0, 0), limits = c(-3, 10)) +
   theme(text = element_text(size = 20))
 rIOC
@@ -308,16 +283,14 @@ p_values <- c(p_values, summary(stimSubLM)$coefficients[,"Pr(>|t|)"])
 
 lmTable <- nice_table(as.data.frame(report_table(stimSubLM)),
                       title = 'Planum Temporale left', note = 'ABC', 
-                      #col.format.custom = c(2:6, 11:13), format.custom = 'fun',
                       highlight = T)
 lmTable
-print(lmTable, preview = 'docx')
 
 lPT <- ggplot(betasSubMS1, aes(age, betaValues, colour=modality, group=modality)) +
   geom_point(alpha=0.6) +
-  geom_smooth(method='lm', aes(linetype = modality)) +
+  geom_smooth(method='lm', aes(linetype = modality), linewidth = 1.2) +
   scale_color_manual(values = viridis(n=2, begin = 0.2, end = 0.8)) +
-  ggtitle('Left Planum Temporale') +
+  ggtitle('Left planum temporale') +
   jtools::theme_apa(remove.y.gridlines = F) + scale_y_continuous(expand = c(0, 0), limits = c(-3, 10)) +
   theme(text = element_text(size = 20))
 lPT
@@ -338,16 +311,14 @@ p_values <- c(p_values, summary(stimSubLM)$coefficients[,"Pr(>|t|)"])
 
 lmTable <- nice_table(as.data.frame(report_table(stimSubLM)),
                       title = 'Planum Temporale Right', note = 'ABC', 
-                      #col.format.custom = c(2:6, 11:13), format.custom = 'fun',
                       highlight = T)
 lmTable
-print(lmTable, preview = 'docx')
 
 rPT <- ggplot(betasSubMS1, aes(age, betaValues, colour=modality, group=modality)) +
   geom_point(alpha=0.6) +
-  geom_smooth(method='lm', aes(linetype = modality)) +
+  geom_smooth(method='lm', aes(linetype = modality), linewidth = 1.2) +
   scale_color_manual(values = viridis(n=2, begin = 0.2, end = 0.8)) +
-  ggtitle('Right Planum Temporale') +
+  ggtitle('Right planum temporale') +
   jtools::theme_apa(remove.y.gridlines = F) + scale_y_continuous(expand = c(0, 0), limits = c(-3, 10)) +
   theme(text = element_text(size = 20))
 rPT 
@@ -368,16 +339,14 @@ p_values <- c(p_values, summary(stimSubLM)$coefficients[,"Pr(>|t|)"])
 
 lmTable <- nice_table(as.data.frame(report_table(stimSubLM)),
                       title = 'Postcentral Gyrus left', note = 'ABC', 
-                      #col.format.custom = c(2:6, 11:13), format.custom = 'fun',
                       highlight = T)
 lmTable
-print(lmTable, preview = 'docx')
 
 lPCG <- ggplot(betasSubMS1, aes(age, betaValues, colour=modality, group=modality)) +
   geom_point(alpha=0.6) +
-  geom_smooth(method='lm', aes(linetype = modality)) +
+  geom_smooth(method='lm', aes(linetype = modality), linewidth = 1.2) +
   scale_color_manual(values = viridis(n=2, begin = 0.2, end = 0.8)) +
-  ggtitle('Left Postcentral Gyrus') +
+  ggtitle('Left postcentral gyrus') +
   jtools::theme_apa(remove.y.gridlines = F) + scale_y_continuous(expand = c(0, 0), limits = c(-3, 10)) +
   theme(text = element_text(size = 20))
 lPCG
@@ -398,16 +367,14 @@ p_values <- c(p_values, summary(stimSubLM)$coefficients[,"Pr(>|t|)"])
 
 lmTable <- nice_table(as.data.frame(report_table(stimSubLM)),
                       title = 'Postcentral Gyrus right', note = 'ABC', 
-                      #col.format.custom = c(2:6, 11:13), format.custom = 'fun',
                       highlight = T)
 lmTable
-print(lmTable, preview = 'docx')
 
 rPCG <- ggplot(betasSubMS1, aes(age, betaValues, colour=modality, group=modality)) +
   geom_point(alpha=0.6) +
-  geom_smooth(method='lm', aes(linetype = modality)) +
+  geom_smooth(method='lm', aes(linetype = modality), linewidth = 1.2) +
   scale_color_manual(values = viridis(n=2, begin = 0.2, end = 0.8)) +
-  ggtitle('Right Postcentral Gyrus') +
+  ggtitle('Right postcentral gyrus') +
   jtools::theme_apa(remove.y.gridlines = F) + scale_y_continuous(expand = c(0, 0), limits = c(-3, 10)) +
   theme(text = element_text(size = 20))
 rPCG
@@ -428,16 +395,14 @@ p_values <- c(p_values, summary(stimSubLM)$coefficients[,"Pr(>|t|)"])
 
 lmTable <- nice_table(as.data.frame(report_table(stimSubLM)),
                       title = 'Precentral Gyrus left', note = 'ABC', 
-                      #col.format.custom = c(2:6, 11:13), format.custom = 'fun',
                       highlight = T)
 lmTable
-print(lmTable, preview = 'docx')
 
 lPrCG <- ggplot(betasSubMS1, aes(age, betaValues, colour=modality, group=modality)) +
   geom_point(alpha=0.6) +
-  geom_smooth(method='lm', aes(linetype = modality)) +
+  geom_smooth(method='lm', aes(linetype = modality), linewidth = 1.2) +
   scale_color_manual(values = viridis(n=2, begin = 0.2, end = 0.8)) +
-  ggtitle('Left Precentral Gyrus') +
+  ggtitle('Left precentral gyrus') +
   jtools::theme_apa(remove.y.gridlines = F) + scale_y_continuous(expand = c(0, 0), limits = c(-3, 10)) +
   theme(text = element_text(size = 20))
 lPrCG
@@ -458,16 +423,14 @@ p_values <- c(p_values, summary(stimSubLM)$coefficients[,"Pr(>|t|)"])
 
 lmTable <- nice_table(as.data.frame(report_table(stimSubLM)),
                       title = 'Precentral Gyrus right', note = 'ABC', 
-                      #col.format.custom = c(2:6, 11:13), format.custom = 'fun',
                       highlight = T)
 lmTable
-print(lmTable, preview = 'docx')
 
 rPrCG <- ggplot(betasSubMS1, aes(age, betaValues, colour=modality, group=modality)) +
   geom_point(alpha=0.6) +
-  geom_smooth(method='lm', aes(linetype = modality)) +
+  geom_smooth(method='lm', aes(linetype = modality), linewidth = 1.2) +
   scale_color_manual(values = viridis(n=2, begin = 0.2, end = 0.8)) +
-  ggtitle('Right Precentral Gyrus') +
+  ggtitle('Right precentral gyrus') +
   jtools::theme_apa(remove.y.gridlines = F) + scale_y_continuous(expand = c(0, 0), limits = c(-3, 10)) +
   theme(text = element_text(size = 20))
 rPrCG
@@ -488,16 +451,14 @@ p_values <- c(p_values, summary(stimSubLM)$coefficients[,"Pr(>|t|)"])
 
 lmTable <- nice_table(as.data.frame(report_table(stimSubLM)),
                       title = 'Superior Parietal Lobe left', note = 'ABC', 
-                      #col.format.custom = c(2:6, 11:13), format.custom = 'fun',
                       highlight = T)
 lmTable
-print(lmTable, preview = 'docx')
 
 lSPL <- ggplot(betasSubMS1, aes(age, betaValues, colour=modality, group=modality)) +
   geom_point(alpha=0.6) +
-  geom_smooth(method='lm', aes(linetype = modality)) +
+  geom_smooth(method='lm', aes(linetype = modality), linewidth = 1.2) +
   scale_color_manual(values = viridis(n=2, begin = 0.2, end = 0.8)) +
-  ggtitle('Left Superior Parietal Lobe') +
+  ggtitle('Left sup. parietal lobe') +
   jtools::theme_apa(remove.y.gridlines = F) + scale_y_continuous(expand = c(0, 0), limits = c(-3, 10)) +
   theme(text = element_text(size = 20))
 lSPL
@@ -518,16 +479,14 @@ p_values <- c(p_values, summary(stimSubLM)$coefficients[,"Pr(>|t|)"])
 
 lmTable <- nice_table(as.data.frame(report_table(stimSubLM)),
                       title = 'Superior Parietal Lobe right', note = 'ABC', 
-                      #col.format.custom = c(2:6, 11:13), format.custom = 'fun',
                       highlight = T)
 lmTable
-print(lmTable, preview = 'docx')
 
 rSPL <- ggplot(betasSubMS1, aes(age, betaValues, colour=modality, group=modality)) +
   geom_point(alpha=0.6) +
-  geom_smooth(method='lm', aes(linetype = modality)) +
+  geom_smooth(method='lm', aes(linetype = modality), linewidth = 1.2) +
   scale_color_manual(values = viridis(n=2, begin = 0.2, end = 0.8)) +
-  ggtitle('Right Superior Parietal Lobe') +
+  ggtitle('Right sup. parietal lobe') +
   jtools::theme_apa(remove.y.gridlines = F) + scale_y_continuous(expand = c(0, 0), limits = c(-3, 10)) +
   theme(text = element_text(size = 20))
 rSPL
@@ -548,27 +507,20 @@ p_values <- c(p_values, summary(stimSubLM)$coefficients[,"Pr(>|t|)"])
 
 lmTable <- nice_table(as.data.frame(report_table(stimSubLM)),
                       title = 'Thalamus', note = 'ABC', 
-                      #col.format.custom = c(2:6, 11:13), format.custom = 'fun',
                       highlight = T)
 lmTable
-print(lmTable, preview = 'docx')
 
 thal <- ggplot(betasSubMS1, aes(age, betaValues, colour=modality, group=modality)) +
   geom_point(alpha=0.6) +
-  geom_smooth(method='lm', aes(linetype = modality)) +
+  geom_smooth(method='lm', aes(linetype = modality), linewidth = 1.2) +
   scale_color_manual(values = viridis(n=2, begin = 0.2, end = 0.8)) +
   ggtitle('Thalamus') +
   jtools::theme_apa(remove.y.gridlines = F) + scale_y_continuous(expand = c(0, 0), limits = c(-3, 10)) +
   theme(text = element_text(size = 20))
 thal
 
-ggarrange(lAI, rAI, lIOC, rIOC, lPCG, rPCG, lPrCG, rPrCG, lPT, rPT, lSPL, rSPL, thal,
-             common.legend = TRUE, legend = "bottom")
 
-ggsave(file.path(outputFolder, 'figures', 'ROIstimBetaMSI_sub.png'),
-       height = 30, width = 48, units = "cm")
-
-# adjust p-values
+## adjust p-values
 adjusted_p_values <- p.adjust(p_values, method = "BH")
 
 msTable <- data.frame(p_uncorr = round(p_values,3), p = round(adjusted_p_values,3))
@@ -578,11 +530,8 @@ lmTable <- nice_table(msTable,
                       col.format.custom = c(1), format.custom = 'fun3',
                       highlight = T)
 lmTable
-print(lmTable, preview = 'docx')
 
 # get effects of anovas
-anova(stimLM2)
-report(anova(stimLM2))
 combined_anovas_final <- combined_anovas %>% 
   select(Model, term, NumDF, statistic, p.value) %>% 
   rename(DF = NumDF,
@@ -597,6 +546,323 @@ lmTable <- nice_table(combined_anovas_final,
 lmTable
 print(lmTable, preview = 'docx')
 
+## annotate plots
+lAI <- lAI +
+  scale_linetype_manual(values=c("longdash", "dotdash")) +
+  ylab("beta values") +
+  annotate("text", label = "paste('age ', italic(p), ' = .013*')",
+           parse = TRUE, x = 5.8, y = 9.8,
+           hjust = 0, vjust = 1, color = "blue", size = 7.5) +
+  jtools::theme_apa(remove.y.gridlines = F) + scale_y_continuous(expand = c(0, 0), limits = c(MSImin, MSImax)) +
+  theme(#text = element_text(size = 25),  # Increases all text
+    axis.title.y = element_text(size = 22), # Axis titles
+    axis.title.x = element_text(size = 22), # Axis titles
+    axis.text.y = element_text(size = 20), # Axis titles
+    axis.text.x = element_text(size = 20), # Axis titles
+    legend.text = element_text(size = 22),  # Legend text
+    strip.text.x = element_text(size=22),
+    plot.title = element_text(size=22),
+    legend.position = "none"
+  ) 
+
+ggsave(file.path(outputFolder, 'figures', 'ROIstimBetaMSI_lAI.tif'),
+       lAI,
+       height = 8, width = 12.8, units = "cm")
+
+rAI <- rAI +
+  scale_linetype_manual(values=c("longdash", "dotdash")) +
+  ylab("beta values") +
+  annotate("text", label = "paste('age ', italic(p), ' = .007**')",
+           parse = TRUE, x = 5.8, y = 9.8,
+           hjust = 0, vjust = 1, color = "blue", size = 7.5) +
+  jtools::theme_apa(remove.y.gridlines = F) + scale_y_continuous(expand = c(0, 0), limits = c(MSImin, MSImax)) +
+  theme(#text = element_text(size = 25),  # Increases all text
+    axis.title.y = element_text(size = 22), # Axis titles
+    axis.title.x = element_text(size = 22), # Axis titles
+    axis.text.y = element_text(size = 20), # Axis titles
+    axis.text.x = element_text(size = 20), # Axis titles
+    legend.text = element_text(size = 22),  # Legend text
+    strip.text.x = element_text(size=22),
+    plot.title = element_text(size=22),
+    legend.position = "none"
+  ) 
+
+ggsave(file.path(outputFolder, 'figures', 'ROIstimBetaMSI_rAI.tif'),
+       rAI,
+       height = 8, width = 12.8, units = "cm")
+
+lIOC <- lIOC +
+  scale_linetype_manual(values=c("longdash", "dotdash")) +
+  ylab("beta values") +
+  annotate("text", label = "paste('modality ', italic(p), ' = .021*')",
+           parse = TRUE, x = 5.8, y = 9.8,
+           hjust = 0, vjust = 1, color = "blue", size = 7.5) +
+  annotate("text", label = "paste('age ', italic(p), ' = .002**')",
+           parse = TRUE, x = 5.8, y = 8.0,
+           hjust = 0, vjust = 1, color = "blue", size = 7.5) +
+  annotate("text", label = "paste('age × modality ', italic(p), ' = .010**')",
+           parse = TRUE, x = 5.8, y = 6.2,
+           hjust = 0, vjust = 1, color = "blue", size = 7.5) +
+  jtools::theme_apa(remove.y.gridlines = F) + scale_y_continuous(expand = c(0, 0), limits = c(MSImin, MSImax)) +
+  theme(#text = element_text(size = 25),  # Increases all text
+    axis.title.y = element_text(size = 22), # Axis titles
+    axis.title.x = element_text(size = 22), # Axis titles
+    axis.text.y = element_text(size = 20), # Axis titles
+    axis.text.x = element_text(size = 20), # Axis titles
+    legend.text = element_text(size = 22),  # Legend text
+    strip.text.x = element_text(size=22),
+    plot.title = element_text(size=22),
+    legend.position = "none"
+  ) 
+
+ggsave(file.path(outputFolder, 'figures', 'ROIstimBetaMSI_lIOC.tif'),
+       lIOC,
+       height = 8, width = 12.8, units = "cm")
+
+rIOC <- rIOC +
+  scale_linetype_manual(values=c("longdash", "dotdash")) +
+  ylab("beta values") +
+  annotate("text", label = "paste('modality ', italic(p), ' = .020*')",
+           parse = TRUE, x = 5.8, y = 9.8,
+           hjust = 0, vjust = 1, color = "blue", size = 7.5) +
+  annotate("text", label = "paste('age × modality ', italic(p), ' = .011*')",
+           parse = TRUE, x = 5.8, y = 8.0,
+           hjust = 0, vjust = 1, color = "blue", size = 7.5) +
+  jtools::theme_apa(remove.y.gridlines = F) + scale_y_continuous(expand = c(0, 0), limits = c(MSImin, MSImax)) +
+  theme(#text = element_text(size = 25),  # Increases all text
+    axis.title.y = element_text(size = 22), # Axis titles
+    axis.title.x = element_text(size = 22), # Axis titles
+    axis.text.y = element_text(size = 20), # Axis titles
+    axis.text.x = element_text(size = 20), # Axis titles
+    legend.text = element_text(size = 22),  # Legend text
+    strip.text.x = element_text(size=22),
+    plot.title = element_text(size=22),
+    legend.position = "none"
+  ) 
+
+ggsave(file.path(outputFolder, 'figures', 'ROIstimBetaMSI_rIOC.tif'),
+       rIOC,
+       height = 8, width = 12.8, units = "cm")
+
+lPCG <- lPCG +
+  scale_linetype_manual(values=c("longdash", "dotdash")) +
+  ylab("beta values") +
+  annotate("text", label = "paste('age ', italic(p), ' = .007**')",
+           parse = TRUE, x = 5.8, y = 9.8,
+           hjust = 0, vjust = 1, color = "blue", size = 7.5) +
+  jtools::theme_apa(remove.y.gridlines = F) + scale_y_continuous(expand = c(0, 0), limits = c(MSImin, MSImax)) +
+  theme(#text = element_text(size = 25),  # Increases all text
+    axis.title.y = element_text(size = 22), # Axis titles
+    axis.title.x = element_text(size = 22), # Axis titles
+    axis.text.y = element_text(size = 20), # Axis titles
+    axis.text.x = element_text(size = 20), # Axis titles
+    legend.text = element_text(size = 22),  # Legend text
+    strip.text.x = element_text(size=22),
+    plot.title = element_text(size=22),
+    legend.position = "none"
+  ) 
+
+ggsave(file.path(outputFolder, 'figures', 'ROIstimBetaMSI_lPCG.tif'),
+       lPCG,
+       height = 8, width = 12.8, units = "cm")
+
+rPCG <- rPCG +
+  scale_linetype_manual(values=c("longdash", "dotdash")) +
+  ylab("beta values") +
+  jtools::theme_apa(remove.y.gridlines = F) + scale_y_continuous(expand = c(0, 0), limits = c(MSImin, MSImax)) +
+  theme(#text = element_text(size = 25),  # Increases all text
+    axis.title.y = element_text(size = 22), # Axis titles
+    axis.title.x = element_text(size = 22), # Axis titles
+    axis.text.y = element_text(size = 20), # Axis titles
+    axis.text.x = element_text(size = 20), # Axis titles
+    legend.text = element_text(size = 22),  # Legend text
+    strip.text.x = element_text(size=22),
+    plot.title = element_text(size=22),
+    legend.position = "none"
+  ) 
+
+ggsave(file.path(outputFolder, 'figures', 'ROIstimBetaMSI_rPCG.tif'),
+       rPCG,
+       height = 8, width = 12.8, units = "cm")
+
+lPrCG <- lPrCG +
+  scale_linetype_manual(values=c("longdash", "dotdash")) +
+  ylab("beta values") +
+  annotate("text", label = "paste('age ', italic(p), ' < .001***')",
+           parse = TRUE, x = 5.8, y = 9.8,
+           hjust = 0, vjust = 1, color = "blue", size = 7.5) +
+  jtools::theme_apa(remove.y.gridlines = F) + scale_y_continuous(expand = c(0, 0), limits = c(MSImin, MSImax)) +
+  theme(#text = element_text(size = 25),  # Increases all text
+    axis.title.y = element_text(size = 22), # Axis titles
+    axis.title.x = element_text(size = 22), # Axis titles
+    axis.text.y = element_text(size = 20), # Axis titles
+    axis.text.x = element_text(size = 20), # Axis titles
+    legend.text = element_text(size = 22),  # Legend text
+    strip.text.x = element_text(size=22),
+    plot.title = element_text(size=22),
+    legend.position = "none"
+  ) 
+
+ggsave(file.path(outputFolder, 'figures', 'ROIstimBetaMSI_lPrCG.tif'),
+       lPrCG,
+       height = 8, width = 12.8, units = "cm")
+
+rPrCG <- rPrCG +
+  scale_linetype_manual(values=c("longdash", "dotdash")) +
+  ylab("beta values") +
+  annotate("text", label = "paste('age ', italic(p), ' = .020*')",
+           parse = TRUE, x = 5.8, y = 9.8,
+           hjust = 0, vjust = 1, color = "blue", size = 7.5) +
+  jtools::theme_apa(remove.y.gridlines = F) + scale_y_continuous(expand = c(0, 0), limits = c(MSImin, MSImax)) +
+  theme(#text = element_text(size = 25),  # Increases all text
+    axis.title.y = element_text(size = 22), # Axis titles
+    axis.title.x = element_text(size = 22), # Axis titles
+    axis.text.y = element_text(size = 20), # Axis titles
+    axis.text.x = element_text(size = 20), # Axis titles
+    legend.text = element_text(size = 22),  # Legend text
+    strip.text.x = element_text(size=22),
+    plot.title = element_text(size=22),
+    legend.position = "none"
+  ) 
+
+ggsave(file.path(outputFolder, 'figures', 'ROIstimBetaMSI_rPrCG.tif'),
+       rPrCG,
+       height = 8, width = 12.8, units = "cm")
+
+lPT <- lPT +
+  scale_linetype_manual(values=c("longdash", "dotdash")) +
+  ylab("beta values") +
+  annotate("text", label = "paste('age ', italic(p), ' = .015*')",
+           parse = TRUE, x = 5.8, y = 9.8,
+           hjust = 0, vjust = 1, color = "blue", size = 7.5) +
+  annotate("text", label = "paste('age × modality ', italic(p), ' = .001***')",
+           parse = TRUE, x = 5.8, y = 8.0,
+           hjust = 0, vjust = 1, color = "blue", size = 7.5) +
+  jtools::theme_apa(remove.y.gridlines = F) + scale_y_continuous(expand = c(0, 0), limits = c(MSImin, MSImax)) +
+  theme(#text = element_text(size = 25),  # Increases all text
+    axis.title.y = element_text(size = 22), # Axis titles
+    axis.title.x = element_text(size = 22), # Axis titles
+    axis.text.y = element_text(size = 20), # Axis titles
+    axis.text.x = element_text(size = 20), # Axis titles
+    legend.text = element_text(size = 22),  # Legend text
+    strip.text.x = element_text(size=22),
+    plot.title = element_text(size=22),
+    legend.position = "none"
+  ) 
+
+ggsave(file.path(outputFolder, 'figures', 'ROIstimBetaMSI_lPT.tif'),
+       lPT,
+       height = 8, width = 12.8, units = "cm")
+
+rPT <- rPT +
+  scale_linetype_manual(values=c("longdash", "dotdash")) +
+  ylab("beta values") +
+  annotate("text", label = "paste('age ', italic(p), ' = .020*')",
+           parse = TRUE, x = 5.8, y = 9.8,
+           hjust = 0, vjust = 1, color = "blue", size = 7.5) +
+  annotate("text", label = "paste('age × modality ', italic(p), ' = .001***')",
+           parse = TRUE, x = 5.8, y = 8.0,
+           hjust = 0, vjust = 1, color = "blue", size = 7.5) +
+  jtools::theme_apa(remove.y.gridlines = F) + scale_y_continuous(expand = c(0, 0), limits = c(MSImin, MSImax)) +
+  theme(#text = element_text(size = 25),  # Increases all text
+    axis.title.y = element_text(size = 22), # Axis titles
+    axis.title.x = element_text(size = 22), # Axis titles
+    axis.text.y = element_text(size = 20), # Axis titles
+    axis.text.x = element_text(size = 20), # Axis titles
+    legend.text = element_text(size = 22),  # Legend text
+    strip.text.x = element_text(size=22),
+    plot.title = element_text(size=22),
+    legend.position = "none"
+  ) 
+
+ggsave(file.path(outputFolder, 'figures', 'ROIstimBetaMSI_rPT.tif'),
+       rPT,
+       height = 8, width = 12.8, units = "cm")
+
+lSPL <- lSPL +
+  scale_linetype_manual(values=c("longdash", "dotdash")) +
+  ylab("beta values") +
+  annotate("text", label = "paste('age ', italic(p), ' < .001***')",
+           parse = TRUE, x = 5.8, y = 9.8,
+           hjust = 0, vjust = 1, color = "blue", size = 7.5) +
+  jtools::theme_apa(remove.y.gridlines = F) + scale_y_continuous(expand = c(0, 0), limits = c(MSImin, MSImax)) +
+  theme(#text = element_text(size = 25),  # Increases all text
+    axis.title.y = element_text(size = 22), # Axis titles
+    axis.title.x = element_text(size = 22), # Axis titles
+    axis.text.y = element_text(size = 20), # Axis titles
+    axis.text.x = element_text(size = 20), # Axis titles
+    legend.text = element_text(size = 22),  # Legend text
+    strip.text.x = element_text(size=22),
+    plot.title = element_text(size=22),
+    legend.position = "none"
+  ) 
+
+ggsave(file.path(outputFolder, 'figures', 'ROIstimBetaMSI_lSPL.tif'),
+       lSPL,
+       height = 8, width = 12.8, units = "cm")
+
+rSPL <- rSPL +
+  scale_linetype_manual(values=c("longdash", "dotdash")) +
+  ylab("beta values") +
+  jtools::theme_apa(remove.y.gridlines = F) + scale_y_continuous(expand = c(0, 0), limits = c(MSImin, MSImax)) +
+  theme(#text = element_text(size = 25),  # Increases all text
+    axis.title.y = element_text(size = 22), # Axis titles
+    axis.title.x = element_text(size = 22), # Axis titles
+    axis.text.y = element_text(size = 20), # Axis titles
+    axis.text.x = element_text(size = 20), # Axis titles
+    legend.text = element_text(size = 22),  # Legend text
+    strip.text.x = element_text(size=22),
+    plot.title = element_text(size=22),
+    legend.position = "none"
+  ) 
+
+ggsave(file.path(outputFolder, 'figures', 'ROIstimBetaMSI_rSPL.tif'),
+       rSPL,
+       height = 8, width = 12.8, units = "cm")
+
+thal <- thal +
+  scale_linetype_manual(values=c("longdash", "dotdash")) +
+  ylab("beta values") +
+  annotate("text", label = "paste('age × modality ', italic(p), ' = .042*')",
+           parse = TRUE, x = 5.8, y = 9.8,
+           hjust = 0, vjust = 1, color = "blue", size = 7.5) +
+  jtools::theme_apa(remove.y.gridlines = F) + scale_y_continuous(expand = c(0, 0), limits = c(MSImin, MSImax)) +
+  theme(#text = element_text(size = 25),  # Increases all text
+    axis.title.y = element_text(size = 22), # Axis titles
+    axis.title.x = element_text(size = 22), # Axis titles
+    axis.text.y = element_text(size = 20), # Axis titles
+    axis.text.x = element_text(size = 20), # Axis titles
+    legend.text = element_text(size = 22),  # Legend text
+    strip.text.x = element_text(size=22),
+    plot.title = element_text(size=22),
+    legend.position = "none"
+  ) 
+
+ggsave(file.path(outputFolder, 'figures', 'ROIstimBetaMSI_thal.tif'),
+       thal,
+       height = 8, width = 12.8, units = "cm")
+
+thal <- thal +
+  scale_linetype_manual(values=c("longdash", "dotdash")) +
+  ylab("beta values") +
+  annotate("text", label = "paste('age × modality ', italic(p), ' = .042*')",
+           parse = TRUE, x = 5.8, y = 9.8,
+           hjust = 0, vjust = 1, color = "blue", size = 7.5) +
+  jtools::theme_apa(remove.y.gridlines = F) + scale_y_continuous(expand = c(0, 0), limits = c(MSImin, MSImax)) +
+  theme(#text = element_text(size = 25),  # Increases all text
+    axis.title.y = element_text(size = 22), # Axis titles
+    axis.title.x = element_text(size = 22), # Axis titles
+    axis.text.y = element_text(size = 20), # Axis titles
+    axis.text.x = element_text(size = 20), # Axis titles
+    legend.text = element_text(size = 22),  # Legend text
+    strip.text.x = element_text(size=22),
+    plot.title = element_text(size=22)
+  ) 
+legend <- get_legend(thal)
+cowplot::ggdraw() + cowplot::draw_grob(legend)
+
+ggsave(file.path(outputFolder, 'figures', 'ROIstimBetaMSI_Legend.tif'),
+       height = 4, width = 6.4, units = "cm")
 
 #---------------------------------------------------------------------------------------
 # prediction Error ----
@@ -618,30 +884,35 @@ p_values_PE <- c(p_values_PE, summary(PELM2)$coefficients[,"Pr(>|t|)"])
 
 lmTable <- nice_table(as.data.frame(report_table(PELM2)),
                       title = 'ABC', note = 'ABC', 
-                      #col.format.custom = c(2:6, 11:13), format.custom = 'fun',
                       highlight = T)
 lmTable
-print(lmTable, preview = 'docx')
 
 ggplot(betasPE, aes(age, betaValues, colour=modality, group=modality)) +
-  geom_point() +
+  geom_point(alpha=0.6) +
   geom_smooth(method='lm') +
   scale_color_manual(values = viridis(n=2, begin = 0.2, end = 0.8)) +
-  #ggtitle('Activation in PE Regions during PE Processing') +
-  jtools::theme_apa(remove.y.gridlines = F) + scale_y_continuous(expand = c(0, 0)) +
-  theme(text = element_text(size = 25))
+  ggtitle('RPE network ROI') +
+  ylab("beta values") +
+  jtools::theme_apa(remove.y.gridlines = F) + scale_y_continuous(expand = c(0, 0), limits = c(PEmin, PEmax)) +
+  theme(#text = element_text(size = 25),  # Increases all text
+    axis.title.y = element_text(size = 22), # Axis titles
+    axis.title.x = element_text(size = 22), # Axis titles
+    axis.text.y = element_text(size = 20), # Axis titles
+    axis.text.x = element_text(size = 20), # Axis titles
+    legend.text = element_text(size = 22),  # Legend text
+    strip.text.x = element_text(size=22),
+    plot.title = element_text(size=22),
+    legend.position = "none"
+  ) 
 
 ggsave(file.path(outputFolder, 'figures', 'ROIPEBeta.png'),
        height = 15, width = 24, units = "cm")
+ggsave(file.path(outputFolder, 'figures', 'ROIPEBeta.svg'),
+       height = 8, width = 12.8, units = "cm")
+ggsave(file.path(outputFolder, 'figures', 'ROIPEBeta.tif'),
+       height = 8, width = 12.8, units = "cm")
 
 # effects in subclusters ------------------------------------------
-# p = 0.05/7 = 0.007142857
-# p = 0.05/8 = 0.00625
-levels(betasSubPE$label)
-ggplot(betasSubPE, aes(age, betaValues, colour=modality, group=label)) +
-  geom_point() +
-  geom_smooth(method='lm') +
-  facet_wrap(label~hemisphere)
 
 # anterior insula left
 betasSubPE1 <- betasSubPE %>% 
@@ -659,17 +930,15 @@ p_values_PE <- c(p_values_PE, summary(SubLM)$coefficients[,"Pr(>|t|)"])
 
 lmTable <- nice_table(as.data.frame(report_table(SubLM)),
                       title = 'Left Anterior Insula', note = 'ABC', 
-                      #col.format.custom = c(2:6, 11:13), format.custom = 'fun',
                       highlight = T)
 lmTable
-print(lmTable, preview = 'docx')
 
 p1 <- ggplot(betasSubPE1, aes(age, betaValues, colour=modality, group=modality)) +
   geom_point(alpha=0.6) +
-  geom_smooth(method='lm', aes(linetype = modality)) +
+  geom_smooth(method='lm', aes(linetype = modality), linewidth = 1.2) +
   scale_color_manual(values = viridis(n=2, begin = 0.2, end = 0.8)) +
-  ggtitle('Left Anterior Insula') + ylim(-9,3) +
-  jtools::theme_apa(remove.y.gridlines = F) + scale_y_continuous(expand = c(0, 0), limits = c(-9, 7)) +
+  ggtitle('Left anterior insula') + 
+  jtools::theme_apa(remove.y.gridlines = F) + scale_y_continuous(expand = c(0, 0), c(PEmin, PEmax)) +
   theme(text = element_text(size = 20))
 p1
 
@@ -689,17 +958,15 @@ p_values_PE <- c(p_values_PE, summary(SubLM)$coefficients[,"Pr(>|t|)"])
 
 lmTable <- nice_table(as.data.frame(report_table(SubLM)),
                       title = 'Right Anterior Insula', note = 'ABC', 
-                      #col.format.custom = c(2:6, 11:13), format.custom = 'fun',
                       highlight = T)
 lmTable
-print(lmTable, preview = 'docx')
 
 p2 <- ggplot(betasSubPE1, aes(age, betaValues, colour=modality, group=modality)) +
   geom_point(alpha=0.6) +
-  geom_smooth(method='lm', aes(linetype = modality)) +
+  geom_smooth(method='lm', aes(linetype = modality), linewidth = 1.2) +
   scale_color_manual(values = viridis(n=2, begin = 0.2, end = 0.8)) +
-  ggtitle('Right Anterior Insula') +
-  jtools::theme_apa(remove.y.gridlines = F) + scale_y_continuous(expand = c(0, 0), limits = c(-9, 7)) +
+  ggtitle('Right anterior insula') +
+  jtools::theme_apa(remove.y.gridlines = F) + scale_y_continuous(expand = c(0, 0), c(PEmin, PEmax)) +
   theme(text = element_text(size = 20))
 p2
 
@@ -722,17 +989,15 @@ p_values_PE <- c(p_values_PE, summary(SubLM)$coefficients[,"Pr(>|t|)"])
 
 lmTable <- nice_table(as.data.frame(report_table(SubLM)),
                       title = 'Left Precentral Gyrus', note = 'ABC', 
-                      #col.format.custom = c(2:6, 11:13), format.custom = 'fun',
                       highlight = T)
 lmTable
-print(lmTable, preview = 'docx')
 
 p3 <- ggplot(betasSubPE1, aes(age, betaValues, colour=modality, group=modality)) +
   geom_point(alpha=0.6) +
-  geom_smooth(method='lm', aes(linetype = modality)) +
+  geom_smooth(method='lm', aes(linetype = modality), linewidth = 1.2) +
   scale_color_manual(values = viridis(n=2, begin = 0.2, end = 0.8)) +
-  ggtitle('Left Precentral Gyrus') +
-  jtools::theme_apa(remove.y.gridlines = F) + scale_y_continuous(expand = c(0, 0), limits = c(-9, 7)) +
+  ggtitle('Left precentral gyrus') +
+  jtools::theme_apa(remove.y.gridlines = F) + scale_y_continuous(expand = c(0, 0), c(PEmin, PEmax)) +
   theme(text = element_text(size = 20))
 p3
 
@@ -752,17 +1017,15 @@ p_values_PE <- c(p_values_PE, summary(SubLM)$coefficients[,"Pr(>|t|)"])
 
 lmTable <- nice_table(as.data.frame(report_table(SubLM)),
                       title = 'Right Precentral Gyrus', note = 'ABC', 
-                      #col.format.custom = c(2:6, 11:13), format.custom = 'fun',
                       highlight = T)
 lmTable
-print(lmTable, preview = 'docx')
 
 p4 <- ggplot(betasSubPE1, aes(age, betaValues, colour=modality, group=modality)) +
   geom_point(alpha=0.6) +
-  geom_smooth(method='lm', aes(linetype = modality)) +
+  geom_smooth(method='lm', aes(linetype = modality), linewidth = 1.2) +
   scale_color_manual(values = viridis(n=2, begin = 0.2, end = 0.8)) +
-  ggtitle('Right Precentral Gyrus') +
-  jtools::theme_apa(remove.y.gridlines = F) + scale_y_continuous(expand = c(0, 0), limits = c(-9, 7)) +
+  ggtitle('Right precentral gyrus') +
+  jtools::theme_apa(remove.y.gridlines = F) + scale_y_continuous(expand = c(0, 0), c(PEmin, PEmax)) +
   theme(text = element_text(size = 20))
 p4
 
@@ -782,17 +1045,15 @@ p_values_PE <- c(p_values_PE, summary(SubLM)$coefficients[,"Pr(>|t|)"])
 
 lmTable <- nice_table(as.data.frame(report_table(SubLM)),
                       title = 'Bilateral Supplementary Motor Cortex', note = 'ABC', 
-                      #col.format.custom = c(2:6, 11:13), format.custom = 'fun',
                       highlight = T)
 lmTable
-print(lmTable, preview = 'docx')
 
 p5 <- ggplot(betasSubPE1, aes(age, betaValues, colour=modality, group=modality)) +
   geom_point(alpha=0.6) +
-  geom_smooth(method='lm', aes(linetype = modality)) +
+  geom_smooth(method='lm', aes(linetype = modality), linewidth = 1.2) +
   scale_color_manual(values = viridis(n=2, begin = 0.2, end = 0.8)) +
-  ggtitle('Bilateral Supplementary Motor Cortex') +
-  jtools::theme_apa(remove.y.gridlines = F) + scale_y_continuous(expand = c(0, 0), limits = c(-9, 7)) +
+  ggtitle('L/R suppl. motor cortex') +
+  jtools::theme_apa(remove.y.gridlines = F) + scale_y_continuous(expand = c(0, 0), c(PEmin, PEmax)) +
   theme(text = element_text(size = 20))
 p5
 
@@ -812,17 +1073,15 @@ p_values_PE <- c(p_values_PE, summary(SubLM)$coefficients[,"Pr(>|t|)"])
 
 lmTable <- nice_table(as.data.frame(report_table(SubLM)),
                       title = 'Left Ventral Striatum', note = 'ABC', 
-                      #col.format.custom = c(2:6, 11:13), format.custom = 'fun',
                       highlight = T)
 lmTable
-print(lmTable, preview = 'docx')
 
 p6 <- ggplot(betasSubPE1, aes(age, betaValues, colour=modality, group=modality)) +
   geom_point(alpha=0.6) +
-  geom_smooth(method='lm', aes(linetype = modality)) +
+  geom_smooth(method='lm', aes(linetype = modality), linewidth = 1.2) +
   scale_color_manual(values = viridis(n=2, begin = 0.2, end = 0.8)) +
-  ggtitle('Left Ventral Striatum') +
-  jtools::theme_apa(remove.y.gridlines = F) + scale_y_continuous(expand = c(0, 0), limits = c(-9, 7)) +
+  ggtitle('Left ventral striatum') +
+  jtools::theme_apa(remove.y.gridlines = F) + scale_y_continuous(expand = c(0, 0), c(PEmin, PEmax)) +
   theme(text = element_text(size = 20))
 p6
 
@@ -842,37 +1101,22 @@ p_values_PE <- c(p_values_PE, summary(SubLM)$coefficients[,"Pr(>|t|)"])
 
 lmTable <- nice_table(as.data.frame(report_table(SubLM)),
                       title = 'Right Ventral Striatum', note = 'ABC', 
-                      #col.format.custom = c(2:6, 11:13), format.custom = 'fun',
                       highlight = T)
 lmTable
-print(lmTable, preview = 'docx')
 
 p7 <- ggplot(betasSubPE1, aes(age, betaValues, colour=modality, group=modality)) +
   geom_point(alpha=0.6) +
-  geom_smooth(method='lm', aes(linetype = modality)) +
+  geom_smooth(method='lm', aes(linetype = modality), linewidth = 1.2) +
   scale_color_manual(values = viridis(n=2, begin = 0.2, end = 0.8)) +
-  ggtitle('Right Ventral Striatum') +
-  jtools::theme_apa(remove.y.gridlines = F) + scale_y_continuous(expand = c(0, 0), limits = c(-9, 7)) +
+  ggtitle('Right ventral striatum') +
+  jtools::theme_apa(remove.y.gridlines = F) + scale_y_continuous(expand = c(0, 0), c(PEmin, PEmax)) +
   theme(text = element_text(size = 20))
 p7
 
-ggarrange(p1, p2, p3, p4, p5, p6, p7,
-          common.legend = TRUE, legend = "bottom")
-
-ggsave(file.path(outputFolder, 'figures', 'ROIPEBetaPE_sub.png'),
-       height = 30, width = 48, units = "cm")
-
-# adjust p-values
+## adjust p-values
 adjusted_p_values_PE <- p.adjust(p_values_PE, method = "BH")
 
 msTable <- data.frame(p_uncorr = p_values_PE, p = adjusted_p_values_PE)
-
-lmTable <- nice_table(msTable,
-                      title = 'adjusted p-values', note = 'ABC', 
-                      col.format.custom = c(1), format.custom = 'fun3',
-                      highlight = T)
-lmTable
-print(lmTable, preview = 'docx')
 
 # get effects of anovas
 combined_anovas_PE_final <- combined_anovas_PE %>% 
@@ -887,7 +1131,143 @@ lmTable <- nice_table(combined_anovas_PE_final,
                       col.format.custom = c(5), format.custom = 'fun3',
                       highlight = T)
 lmTable
-print(lmTable, preview = 'docx')
+
+## annotate plots
+p1 <- p1 +
+  scale_linetype_manual(values=c("longdash", "dotdash")) +
+  ylab("beta values") +
+  jtools::theme_apa(remove.y.gridlines = F) + scale_y_continuous(expand = c(0, 0), limits = c(PEmin, PEmax)) +
+  theme(#text = element_text(size = 25),  # Increases all text
+    axis.title.y = element_text(size = 22), # Axis titles
+    axis.title.x = element_text(size = 22), # Axis titles
+    axis.text.y = element_text(size = 20), # Axis titles
+    axis.text.x = element_text(size = 20), # Axis titles
+    legend.text = element_text(size = 22),  # Legend text
+    strip.text.x = element_text(size=22),
+    plot.title = element_text(size=22),
+    legend.position = "none"
+  ) 
+
+ggsave(file.path(outputFolder, 'figures', 'ROIstimBetaMSI_p1.tif'),
+       p1,
+       height = 8, width = 12.8, units = "cm")
+
+p2 <- p2 +
+  scale_linetype_manual(values=c("longdash", "dotdash")) +
+  ylab("beta values") +
+  annotate("text", label = "paste('age ', italic(p), ' < .002**')",
+           parse = TRUE, x = 5.7, y = 5.8,
+           hjust = 0, vjust = 1, color = "blue", size = 7.5) +
+  jtools::theme_apa(remove.y.gridlines = F) + scale_y_continuous(expand = c(0, 0), limits =  c(PEmin, PEmax)) +
+  theme(#text = element_text(size = 25),  # Increases all text
+    axis.title.y = element_text(size = 22), # Axis titles
+    axis.title.x = element_text(size = 22), # Axis titles
+    axis.text.y = element_text(size = 20), # Axis titles
+    axis.text.x = element_text(size = 20), # Axis titles
+    legend.text = element_text(size = 22),  # Legend text
+    strip.text.x = element_text(size=22),
+    plot.title = element_text(size=22),
+    legend.position = "none"
+  ) 
+
+ggsave(file.path(outputFolder, 'figures', 'ROIstimBetaMSI_p2.tif'),
+       p2,
+       height = 8, width = 12.8, units = "cm")
+
+p3 <- p3 +
+  scale_linetype_manual(values=c("longdash", "dotdash")) +
+  ylab("beta values") +
+  jtools::theme_apa(remove.y.gridlines = F) + scale_y_continuous(expand = c(0, 0), limits =  c(PEmin, PEmax)) +
+  theme(#text = element_text(size = 25),  # Increases all text
+    axis.title.y = element_text(size = 22), # Axis titles
+    axis.title.x = element_text(size = 22), # Axis titles
+    axis.text.y = element_text(size = 20), # Axis titles
+    axis.text.x = element_text(size = 20), # Axis titles
+    legend.text = element_text(size = 22),  # Legend text
+    strip.text.x = element_text(size=22),
+    plot.title = element_text(size=22),
+    legend.position = "none"
+  ) 
+
+ggsave(file.path(outputFolder, 'figures', 'ROIstimBetaMSI_p3.tif'),
+       p3,
+       height = 8, width = 12.8, units = "cm")
+
+p4 <- p4 +
+  scale_linetype_manual(values=c("longdash", "dotdash")) +
+  ylab("beta values") +
+  jtools::theme_apa(remove.y.gridlines = F) + scale_y_continuous(expand = c(0, 0), limits =  c(PEmin, PEmax)) +
+  theme(#text = element_text(size = 25),  # Increases all text
+    axis.title.y = element_text(size = 22), # Axis titles
+    axis.title.x = element_text(size = 22), # Axis titles
+    axis.text.y = element_text(size = 20), # Axis titles
+    axis.text.x = element_text(size = 20), # Axis titles
+    legend.text = element_text(size = 22),  # Legend text
+    strip.text.x = element_text(size=22),
+    plot.title = element_text(size=22),
+    legend.position = "none"
+  ) 
+
+ggsave(file.path(outputFolder, 'figures', 'ROIstimBetaMSI_p4.tif'),
+       p4,
+       height = 8, width = 12.8, units = "cm")
+
+p5 <- p5 +
+  scale_linetype_manual(values=c("longdash", "dotdash")) +
+  ylab("beta values") +
+  jtools::theme_apa(remove.y.gridlines = F) + scale_y_continuous(expand = c(0, 0), limits =  c(PEmin, PEmax)) +
+  theme(#text = element_text(size = 25),  # Increases all text
+    axis.title.y = element_text(size = 22), # Axis titles
+    axis.title.x = element_text(size = 22), # Axis titles
+    axis.text.y = element_text(size = 20), # Axis titles
+    axis.text.x = element_text(size = 20), # Axis titles
+    legend.text = element_text(size = 22),  # Legend text
+    strip.text.x = element_text(size=22),
+    plot.title = element_text(size=22),
+    legend.position = "none"
+  ) 
+
+ggsave(file.path(outputFolder, 'figures', 'ROIstimBetaMSI_p5.tif'),
+       p5,
+       height = 8, width = 12.8, units = "cm")
+
+p6 <- p6 +
+  scale_linetype_manual(values=c("longdash", "dotdash")) +
+  ylab("beta values") +
+  jtools::theme_apa(remove.y.gridlines = F) + scale_y_continuous(expand = c(0, 0), limits = c(PEmin, PEmax)) +
+  theme(#text = element_text(size = 25),  # Increases all text
+    axis.title.y = element_text(size = 22), # Axis titles
+    axis.title.x = element_text(size = 22), # Axis titles
+    axis.text.y = element_text(size = 20), # Axis titles
+    axis.text.x = element_text(size = 20), # Axis titles
+    legend.text = element_text(size = 22),  # Legend text
+    strip.text.x = element_text(size=22),
+    plot.title = element_text(size=22),
+    legend.position = "none"
+  ) 
+
+ggsave(file.path(outputFolder, 'figures', 'ROIstimBetaMSI_p6.tif'),
+       p6,
+       height = 8, width = 12.8, units = "cm")
+
+p7 <- p7 +
+  scale_linetype_manual(values=c("longdash", "dotdash")) +
+  ylab("beta values") +
+  jtools::theme_apa(remove.y.gridlines = F) + scale_y_continuous(expand = c(0, 0), limits = c(PEmin, PEmax)) +
+  theme(#text = element_text(size = 25),  # Increases all text
+    axis.title.y = element_text(size = 22), # Axis titles
+    axis.title.x = element_text(size = 22), # Axis titles
+    axis.text.y = element_text(size = 20), # Axis titles
+    axis.text.x = element_text(size = 20), # Axis titles
+    legend.text = element_text(size = 22),  # Legend text
+    strip.text.x = element_text(size=22),
+    plot.title = element_text(size=22),
+    legend.position = "none"
+  ) 
+
+ggsave(file.path(outputFolder, 'figures', 'ROIstimBetaMSI_p7.tif'),
+       p7,
+       height = 8, width = 12.8, units = "cm")
 
 # ------------------------------------------------------------------------------------
 # value ----
@@ -907,10 +1287,8 @@ p_values_VAL <- c(p_values_VAL, summary(valLM2)$coefficients[,"Pr(>|t|)"])
 
 lmTable <- nice_table(as.data.frame(report_table(valLM2)),
                       title = 'ABC', note = 'ABC', 
-                      #col.format.custom = c(2:6, 11:13), format.custom = 'fun',
                       highlight = T)
 lmTable
-print(lmTable, preview = 'docx')
 
 ggplot(betasVAL, aes(age, betaValues, colour=modality, group=modality)) +
   geom_point() +
@@ -925,13 +1303,6 @@ ggsave(file.path(outputFolder, 'plots', 'ROIVALBeta.png'),
 
 # effects in subclusters ---
 #------------------------------------------------------------------------------------
-# p = 0.05/8 = 0.00625
-# p = 0.05/9 = 0.0055555556
-levels(betasSubVAL$label)
-ggplot(betasSubVAL, aes(age, betaValues, colour=modality, group=label)) +
-  geom_point() +
-  geom_smooth(method='lm') +
-  facet_wrap(label~hemisphere)
 
 # amygdala right
 betasSubVAL1 <- betasSubVAL %>% 
@@ -949,14 +1320,12 @@ p_values_VAL <- c(p_values_VAL, summary(SubLM)$coefficients[,"Pr(>|t|)"])
 
 lmTable <- nice_table(as.data.frame(report_table(SubLM)),
                       title = 'Right Amygdala', note = 'ABC', 
-                      #col.format.custom = c(2:6, 11:13), format.custom = 'fun',
                       highlight = T)
 lmTable
-print(lmTable, preview = 'docx')
 
 p10 <- ggplot(betasSubVAL1, aes(age, betaValues, colour=modality, group=modality)) +
   geom_point(alpha=0.6) +
-  geom_smooth(method='lm', aes(linetype = modality)) +
+  geom_smooth(method='lm', aes(linetype = modality), linewidth = 1.2) +
   scale_color_manual(values = viridis(n=2, begin = 0.2, end = 0.8)) +
   ggtitle('Right Amygdala') +
   jtools::theme_apa(remove.y.gridlines = F) + scale_y_continuous(expand = c(0, 0), limits = c(-181, 237)) +
@@ -979,14 +1348,12 @@ p_values_VAL <- c(p_values_VAL, summary(SubLM)$coefficients[,"Pr(>|t|)"])
 
 lmTable <- nice_table(as.data.frame(report_table(SubLM)),
                       title = 'Left Anterior Insula', note = 'ABC', 
-                      #col.format.custom = c(2:6, 11:13), format.custom = 'fun',
                       highlight = T)
 lmTable
-print(lmTable, preview = 'docx')
 
 p20 <- ggplot(betasSubVAL1, aes(age, betaValues, colour=modality, group=modality)) +
   geom_point(alpha=0.6) +
-  geom_smooth(method='lm', aes(linetype = modality)) +
+  geom_smooth(method='lm', aes(linetype = modality), linewidth = 1.2) +
   scale_color_manual(values = viridis(n=2, begin = 0.2, end = 0.8)) +
   ggtitle('Left Anterior Insula') +
   jtools::theme_apa(remove.y.gridlines = F) + scale_y_continuous(expand = c(0, 0), limits = c(-181, 237)) +
@@ -1009,14 +1376,12 @@ p_values_VAL <- c(p_values_VAL, summary(SubLM)$coefficients[,"Pr(>|t|)"])
 
 lmTable <- nice_table(as.data.frame(report_table(SubLM)),
                       title = 'right Anterior Insula', note = 'ABC', 
-                      #col.format.custom = c(2:6, 11:13), format.custom = 'fun',
                       highlight = T)
 lmTable
-print(lmTable, preview = 'docx')
 
 p30 <- ggplot(betasSubVAL1, aes(age, betaValues, colour=modality, group=modality)) +
   geom_point(alpha=0.6) +
-  geom_smooth(method='lm', aes(linetype = modality)) +
+  geom_smooth(method='lm', aes(linetype = modality), linewidth = 1.2) +
   scale_color_manual(values = viridis(n=2, begin = 0.2, end = 0.8)) +
   ggtitle('right Anterior Insula') +
   jtools::theme_apa(remove.y.gridlines = F) + scale_y_continuous(expand = c(0, 0), limits = c(-181, 237)) +
@@ -1039,14 +1404,12 @@ p_values_VAL <- c(p_values_VAL, summary(SubLM)$coefficients[,"Pr(>|t|)"])
 
 lmTable <- nice_table(as.data.frame(report_table(SubLM)),
                       title = 'Bilateral Medial Frontal Cortex', note = 'ABC', 
-                      #col.format.custom = c(2:6, 11:13), format.custom = 'fun',
                       highlight = T)
 lmTable
-print(lmTable, preview = 'docx')
 
 p40 <- ggplot(betasSubVAL1, aes(age, betaValues, colour=modality, group=modality)) +
   geom_point(alpha=0.6) +
-  geom_smooth(method='lm', aes(linetype = modality)) +
+  geom_smooth(method='lm', aes(linetype = modality), linewidth = 1.2) +
   scale_color_manual(values = viridis(n=2, begin = 0.2, end = 0.8)) +
   ggtitle('Bilateral Medial Frontal Cortex') +
   jtools::theme_apa(remove.y.gridlines = F) + scale_y_continuous(expand = c(0, 0), limits = c(-181, 237)) +
@@ -1069,14 +1432,12 @@ p_values_VAL <- c(p_values_VAL, summary(SubLM)$coefficients[,"Pr(>|t|)"])
 
 lmTable <- nice_table(as.data.frame(report_table(SubLM)),
                       title = 'Right Precentral Gyrus', note = 'ABC', 
-                      #col.format.custom = c(2:6, 11:13), format.custom = 'fun',
                       highlight = T)
 lmTable
-print(lmTable, preview = 'docx')
 
 p50 <- ggplot(betasSubVAL1, aes(age, betaValues, colour=modality, group=modality)) +
   geom_point(alpha=0.6) +
-  geom_smooth(method='lm', aes(linetype = modality)) +
+  geom_smooth(method='lm', aes(linetype = modality), linewidth = 1.2) +
   scale_color_manual(values = viridis(n=2, begin = 0.2, end = 0.8)) +
   ggtitle('Right Precentral Gyrus') +
   jtools::theme_apa(remove.y.gridlines = F) + scale_y_continuous(expand = c(0, 0), limits = c(-181, 237)) +
@@ -1099,14 +1460,12 @@ p_values_VAL <- c(p_values_VAL, summary(SubLM)$coefficients[,"Pr(>|t|)"])
 
 lmTable <- nice_table(as.data.frame(report_table(SubLM)),
                       title = 'Bilateral Supplementary Motor Cortex', note = 'ABC', 
-                      #col.format.custom = c(2:6, 11:13), format.custom = 'fun',
                       highlight = T)
 lmTable
-print(lmTable, preview = 'docx')
 
 p60 <- ggplot(betasSubVAL1, aes(age, betaValues, colour=modality, group=modality)) +
   geom_point(alpha=0.6) +
-  geom_smooth(method='lm', aes(linetype = modality)) +
+  geom_smooth(method='lm', aes(linetype = modality), linewidth = 1.2) +
   scale_color_manual(values = viridis(n=2, begin = 0.2, end = 0.8)) +
   ggtitle('Bilateral Supplementary Motor Cortex') +
   jtools::theme_apa(remove.y.gridlines = F) + scale_y_continuous(expand = c(0, 0), limits = c(-181, 237)) +
@@ -1129,14 +1488,12 @@ p_values_VAL <- c(p_values_VAL, summary(SubLM)$coefficients[,"Pr(>|t|)"])
 
 lmTable <- nice_table(as.data.frame(report_table(SubLM)),
                       title = 'Left Ventral Striatum', note = 'ABC', 
-                      #col.format.custom = c(2:6, 11:13), format.custom = 'fun',
                       highlight = T)
 lmTable
-print(lmTable, preview = 'docx')
 
 p70 <- ggplot(betasSubVAL1, aes(age, betaValues, colour=modality, group=modality)) +
   geom_point(alpha=0.6) +
-  geom_smooth(method='lm', aes(linetype = modality)) +
+  geom_smooth(method='lm', aes(linetype = modality), linewidth = 1.2) +
   scale_color_manual(values = viridis(n=2, begin = 0.2, end = 0.8)) +
   ggtitle('Left Ventral Striatum') +
   jtools::theme_apa(remove.y.gridlines = F) + scale_y_continuous(expand = c(0, 0), limits = c(-181, 237)) +
@@ -1159,37 +1516,22 @@ p_values_VAL <- c(p_values_VAL, summary(SubLM)$coefficients[,"Pr(>|t|)"])
 
 lmTable <- nice_table(as.data.frame(report_table(SubLM)),
                       title = 'Right Ventral Striatum', note = 'ABC', 
-                      #col.format.custom = c(2:6, 11:13), format.custom = 'fun',
                       highlight = T)
 lmTable
-print(lmTable, preview = 'docx')
 
 p80 <- ggplot(betasSubVAL1, aes(age, betaValues, colour=modality, group=modality)) +
   geom_point(alpha=0.6) +
-  geom_smooth(method='lm', aes(linetype = modality)) +
+  geom_smooth(method='lm', aes(linetype = modality), linewidth = 1.2) +
   scale_color_manual(values = viridis(n=2, begin = 0.2, end = 0.8)) +
   ggtitle('Right Ventral Striatum') +
   jtools::theme_apa(remove.y.gridlines = F) + scale_y_continuous(expand = c(0, 0), limits = c(-181, 237)) +
   theme(text = element_text(size = 20))
 p80
 
-ggarrange(p10, p20, p30, p40, p50, p60, p70, p80,
-          common.legend = TRUE, legend = "bottom")
-
-ggsave(file.path(outputFolder, 'plots', 'ROIValBetaVAL_sub.png'),
-       height = 30, width = 48, units = "cm")
-
-# adjust p-values
+## adjust p-values
 adjusted_p_values_VAL <- p.adjust(p_values_VAL, method = "BH")
 
 msTable <- data.frame(p_uncorr = p_values_VAL, p = adjusted_p_values_VAL)
-
-lmTable <- nice_table(msTable,
-                      title = 'adjusted p-values', note = 'ABC', 
-                      col.format.custom = c(1), format.custom = 'fun3',
-                      highlight = T)
-lmTable
-print(lmTable, preview = 'docx')
 
 # get effects of anovas
 combined_anovas_VAL_final <- combined_anovas_VAL %>% 
@@ -1205,3 +1547,4 @@ lmTable <- nice_table(combined_anovas_VAL_final,
                       highlight = T)
 lmTable
 print(lmTable, preview = 'docx')
+

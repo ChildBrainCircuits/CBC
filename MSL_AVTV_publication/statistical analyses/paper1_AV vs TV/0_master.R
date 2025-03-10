@@ -41,6 +41,8 @@ set.seed(27)
 
 # set general folder using the current location
 workspace <- getwd()
+setwd('../../..')
+repoPath <- getwd()
 
 # set name of script with functions
 funScript <- "funs.R"
@@ -51,25 +53,10 @@ source(paste(workspace, funScript, sep = "/"))
 # set names of folders for input and output files, set output filename
 inputFolder <- paste(workspace, "input", sep = "/")
 outputFolder <- paste(workspace, "output", sep = "/")
-modelingFolder <- file.path('A:/Projects/04-03-ChildBrainCircuits/Analyses/Modeling/CBC_Modeling_v3_paper1/analysed')
-logFolder <- 'B:/Data/CBC_Data/analyses/multisensory_nr/preprocessing/paper1_AVvsTV/'
+modelingFolder <- file.path(repoPath, 'scripts/modelling/analysed/')
+logFolder <- file.path(repoPath, 'data/logfiles/')
 
 # set data input folder as default location of input files
 setwd(workspace)
 
 
-##########################################################
-##                      PROCESSING                      ##
-##########################################################
-
-# 01: Read Redcap export --------------------------------------------
-# load and merge the data files
-source(paste(workspace, "1_prepare.R", sep = "/"))
-
-# 02: Overview over MR Runs --------------------------------------------
-# load and merge the data files
-source(paste(workspace, "1_prepare.R", sep = "/"))
-
-# 03: Analyse ------------------------------------------
-# explore and analyse the data
-# source(paste(workspace, "3_analyse.R", sep = "/"))

@@ -1,15 +1,10 @@
 ##########################################################
-##                      Analyse                         ##
-##########################################################
-## Description :: 
-## Input :::::::: 
-## Libraries :::: 
-## Output ::::::: 
+##           Re-Analyse without diagnosed               ##
 ##########################################################
 
 ##########################################################
 # load data ----------------------------------------------
-# load(file.path(outputFolder, "data_childrenMR.RData"))
+load(file.path(outputFolder, "data_childrenMR.RData"))
 load(file.path(outputFolder, "expInfo_childrenMR.RData"))
 load(file.path(outputFolder, "demo.RData"))
 modelingData <- read_csv(paste(outputFolder, "modelling", "modelingData.csv", sep = "/"))
@@ -109,10 +104,8 @@ anova(driftLM4)
 
 lmTable <- nice_table(as.data.frame(report_table(driftLM4)),
                       title = "Linear Mixed Model for Drift Rate and Modality", note = "ABC", 
-                      #col.format.custom = c(2:6, 11:13), format.custom = "fun",
                       highlight = T)
 lmTable
-print(lmTable, preview = "docx")
 
 driftLM2PH <- emmeans::emmeans(driftLM4, "bin", data=modDataSumm)
 pairs(driftLM2PH)
@@ -120,10 +113,8 @@ pairs(driftLM2PH)
 lmPHTable <- nice_table(as.data.frame(pairs(driftLM2PH)),
                         title = "Post-hoc tests for Drift Rates and bin", note = "ABC", 
                         col.format.custom = 2:5, format.custom = "fun2",
-                        #col.format.custom = 6, format.custom = "fun3",
                         highlight = T)
 lmPHTable
-print(lmPHTable, preview = "docx")
 
 ggplot(modDataSumm, aes(bin, absMDriftRate, fill = modality)) +
   introdataviz::geom_split_violin(alpha = 0.8, width = 1.2) +
@@ -163,7 +154,6 @@ DRmodAge <- selectedData %>%
             mAcc = mean(trials_runs.correct_answer))
 
 ggplot(DRmodAge, aes(age, absMDriftRate, color=modality)) +
-  #geom_violin() +
   geom_point() +
   geom_smooth(method = "lm")+
   facet_grid(~bin) +
@@ -218,7 +208,6 @@ ggplot(betasPE, aes(age, betaValues, colour=modality, group=modality)) +
   geom_point() +
   geom_smooth(method='lm') +
   scale_color_manual(values = viridis(n=2, begin = 0.2, end = 0.8)) +
-  #ggtitle('Activation in PE Regions during PE Processing') +
   jtools::theme_apa(remove.y.gridlines = F) + scale_y_continuous(expand = c(0, 0)) +
   theme(text = element_text(size = 25))
 
@@ -226,13 +215,7 @@ ggsave(file.path(outputFolder, 'figures', 'ROIPEBeta_Subgroup.png'),
        height = 15, width = 24, units = "cm")
 
 # effects in subclusters ------------------------------------------
-# p = 0.05/7 = 0.007142857
-# p = 0.05/8 = 0.00625
 levels(betasSubPE$label)
-ggplot(betasSubPE, aes(age, betaValues, colour=modality, group=label)) +
-  geom_point() +
-  geom_smooth(method='lm') +
-  facet_wrap(label~hemisphere)
 
 # anterior insula left
 betasSubPE1 <- betasSubPE %>% 
@@ -250,10 +233,8 @@ p_values_PE <- c(p_values_PE, summary(SubLM)$coefficients[,"Pr(>|t|)"])
 
 lmTable <- nice_table(as.data.frame(report_table(SubLM)),
                       title = 'Left Anterior Insula', note = 'ABC', 
-                      #col.format.custom = c(2:6, 11:13), format.custom = 'fun',
                       highlight = T)
 lmTable
-print(lmTable, preview = 'docx')
 
 p1 <- ggplot(betasSubPE1, aes(age, betaValues, colour=modality, group=modality)) +
   geom_point(alpha=0.6) +
@@ -280,10 +261,8 @@ p_values_PE <- c(p_values_PE, summary(SubLM)$coefficients[,"Pr(>|t|)"])
 
 lmTable <- nice_table(as.data.frame(report_table(SubLM)),
                       title = 'Right Anterior Insula', note = 'ABC', 
-                      #col.format.custom = c(2:6, 11:13), format.custom = 'fun',
                       highlight = T)
 lmTable
-print(lmTable, preview = 'docx')
 
 p2 <- ggplot(betasSubPE1, aes(age, betaValues, colour=modality, group=modality)) +
   geom_point(alpha=0.6) +
@@ -310,10 +289,8 @@ p_values_PE <- c(p_values_PE, summary(SubLM)$coefficients[,"Pr(>|t|)"])
 
 lmTable <- nice_table(as.data.frame(report_table(SubLM)),
                       title = 'Left Precentral Gyrus', note = 'ABC', 
-                      #col.format.custom = c(2:6, 11:13), format.custom = 'fun',
                       highlight = T)
 lmTable
-print(lmTable, preview = 'docx')
 
 p3 <- ggplot(betasSubPE1, aes(age, betaValues, colour=modality, group=modality)) +
   geom_point(alpha=0.6) +
@@ -340,10 +317,8 @@ p_values_PE <- c(p_values_PE, summary(SubLM)$coefficients[,"Pr(>|t|)"])
 
 lmTable <- nice_table(as.data.frame(report_table(SubLM)),
                       title = 'Right Precentral Gyrus', note = 'ABC', 
-                      #col.format.custom = c(2:6, 11:13), format.custom = 'fun',
                       highlight = T)
 lmTable
-print(lmTable, preview = 'docx')
 
 p4 <- ggplot(betasSubPE1, aes(age, betaValues, colour=modality, group=modality)) +
   geom_point(alpha=0.6) +
@@ -370,10 +345,8 @@ p_values_PE <- c(p_values_PE, summary(SubLM)$coefficients[,"Pr(>|t|)"])
 
 lmTable <- nice_table(as.data.frame(report_table(SubLM)),
                       title = 'Bilateral Supplementary Motor Cortex', note = 'ABC', 
-                      #col.format.custom = c(2:6, 11:13), format.custom = 'fun',
                       highlight = T)
 lmTable
-print(lmTable, preview = 'docx')
 
 p5 <- ggplot(betasSubPE1, aes(age, betaValues, colour=modality, group=modality)) +
   geom_point(alpha=0.6) +
@@ -400,10 +373,8 @@ p_values_PE <- c(p_values_PE, summary(SubLM)$coefficients[,"Pr(>|t|)"])
 
 lmTable <- nice_table(as.data.frame(report_table(SubLM)),
                       title = 'Left Ventral Striatum', note = 'ABC', 
-                      #col.format.custom = c(2:6, 11:13), format.custom = 'fun',
                       highlight = T)
 lmTable
-print(lmTable, preview = 'docx')
 
 p6 <- ggplot(betasSubPE1, aes(age, betaValues, colour=modality, group=modality)) +
   geom_point(alpha=0.6) +
@@ -430,10 +401,8 @@ p_values_PE <- c(p_values_PE, summary(SubLM)$coefficients[,"Pr(>|t|)"])
 
 lmTable <- nice_table(as.data.frame(report_table(SubLM)),
                       title = 'Right Ventral Striatum', note = 'ABC', 
-                      #col.format.custom = c(2:6, 11:13), format.custom = 'fun',
                       highlight = T)
 lmTable
-print(lmTable, preview = 'docx')
 
 p7 <- ggplot(betasSubPE1, aes(age, betaValues, colour=modality, group=modality)) +
   geom_point(alpha=0.6) +
@@ -444,23 +413,10 @@ p7 <- ggplot(betasSubPE1, aes(age, betaValues, colour=modality, group=modality))
   theme(text = element_text(size = 20))
 p7
 
-ggarrange(p1, p2, p3, p4, p5, p6, p7,
-          common.legend = TRUE, legend = "bottom")
-
-ggsave(file.path(outputFolder, 'figures', 'ROIPEBetaPE_sub_subGroup.png'),
-       height = 30, width = 48, units = "cm")
-
 # adjust p-values
 adjusted_p_values_PE <- p.adjust(p_values_PE, method = "BH")
 
 msTable <- data.frame(p_uncorr = p_values_PE, p = adjusted_p_values_PE)
-
-lmTable <- nice_table(msTable,
-                      title = 'adjusted p-values', note = 'ABC', 
-                      col.format.custom = c(1), format.custom = 'fun3',
-                      highlight = T)
-lmTable
-print(lmTable, preview = 'docx')
 
 # get effects of anovas
 combined_anovas_PE_final <- combined_anovas_PE %>% 

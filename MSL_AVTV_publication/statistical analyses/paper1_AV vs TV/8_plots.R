@@ -1,16 +1,9 @@
 ##########################################################
 ##                         PLOTS                        ##
 ##########################################################
-## Description :: 
-## Input :::::::: 
-## Libraries :::: 
-## Output ::::::: 
-##########################################################
 
 ##########################################################
 # Load and merge data ------------------------------------
-
-
 
 ##########################################################
 # plot tactile frequency patterns ------------------------
@@ -32,18 +25,31 @@ frequencies_long <- frequencies %>%
          set = factor(set, labels = c("set 1", "set 2", "set 3")))  # Convert time to numeric for plotting
 
 ggplot(frequencies_long, aes(x = time, y = value, group = pattern, color = pattern)) +
-  #geom_line(size = 1.5) +
-  geom_smooth(method = "lm", formula = y ~ poly(x, 2), size = 1.5) +
+  geom_smooth(method = "lm", formula = y ~ poly(x, 2), linewidth = 2) +
   facet_wrap(~set) +
   scale_y_log10(expand = c(0, 0.05),
                 breaks = sort(unique(frequencies_long$value)),
                 minor_breaks = NULL) +  
-  #ggtitle("Frequency Patterns for Tactile Stimulation") +
   labs(x = "Time [s]", y = "Frequency [Hz] (log scale)", color = "Pattern") +
   jtools::theme_apa(remove.y.gridlines = F, legend.pos = "none") + scale_color_viridis_d(option = "turbo", begin = 0.1, end = 0.9) +
-  theme(text = element_text(size = 20)) 
+  theme(#text = element_text(size = 25),  # Increases all text
+    axis.title.y = element_text(size = 22), # Axis titles
+    axis.title.x = element_text(size = 22), # Axis titles
+    axis.text.y = element_text(size = 20), # Axis titles
+    axis.text.x = element_text(size = 20), # Axis titles
+    legend.text = element_text(size = 22),  # Legend text
+    strip.text.x = element_text(size=22),
+    plot.title = element_text(size=22),
+    legend.position = "none"
+  ) 
+
+ggsave(file.path(outputFolder, 'figures', 'tactileFrequencies.svg'),
+       height = 12.6, width = 32.4, units = "cm")
 
 ggsave(file.path(outputFolder, 'figures', 'tactileFrequencies.jpg'),
+       width = 40, height = 15, units = 'cm')
+
+ggsave(file.path(outputFolder, 'figures', 'tactileFrequencies.tif'),
        width = 40, height = 15, units = 'cm')
 
 ##########################################################

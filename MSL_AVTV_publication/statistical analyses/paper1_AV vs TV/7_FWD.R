@@ -1,82 +1,39 @@
 ##########################################################
-##                        PREPARE                       ##
-##########################################################
-## Description :: 
-## Input :::::::: 
-## Libraries :::: 
-## Output ::::::: 
+##             Framewise Displacement                   ##
 ##########################################################
 
 # Load and merge data ------------------------------------
 ##########################################################
-# meanFWDrun <- read_excel('B:/Data/CBC_Data/analyses/multisensory_nr/analyses/MR_children/paper1NEW/meanFWD.xlsx')
-meanFWDrun <- read_excel("B:/Data/CBC_Data/analyses/multisensory_nr/outputs/children_MR/badScans/badscans_allBad_v2_FWD_Art.xlsx")
+meanFWDrun <- read_excel(file.path(inputFolder, "badscans_allBad_v2_FWD09.xlsx"))
 load(file.path(outputFolder, "demo.RData"))
 
-# meanFWD <- meanFWDrun %>% 
-#   mutate(meanFWD = rowMeans(meanFWDrun[,2:6], na.rm = TRUE)) %>% 
-#   select(ID, meanFWD) %>% 
-#   left_join(., demo[,c('ID', 'age')], by = join_by(ID))
-
+# prepare data
 meanFWD <- meanFWDrun %>% 
-  select(ID, meanFWDValue) %>% 
+  select(ID, meanFWDValue) %>%
+  filter(ID %in% demo$ID) %>% 
   group_by(ID) %>% 
   summarise(meanFWD = mean(meanFWDValue, na.rm = TRUE)) %>% 
-  left_join(., demo[,c('ID', 'age')], by = join_by(ID)) %>% 
-  filter(!is.na(age))
+  left_join(., demo[,c('ID', 'age')], by = join_by(ID))
 
 cor.test(meanFWD$meanFWD, meanFWD$age)
 report(cor.test(meanFWD$meanFWD, meanFWD$age))
 
-summary(lm(meanFWD ~ age, meanFWD))
-anova(lm(meanFWD ~ age, meanFWD))
-report(anova(lm(meanFWD ~ age, meanFWD)))
-
 ggplot(meanFWD, aes(age, meanFWD)) +
   geom_point() +
   stat_smooth(method = "lm") +
-  ggtitle("Mean Framewise Displacement Values and Age") +
-  ylab("mean FWD")
+  ggtitle("") +
+  ylab("mean FWD") +
+  jtools::theme_apa(remove.y.gridlines = F) + scale_y_continuous(expand = c(0, 0), limits=c(0,1.6)) + 
+  theme(#text = element_text(size = 25),  # Increases all text
+    axis.title.y = element_text(size = 22), # Axis titles
+    axis.title.x = element_text(size = 22), # Axis titles
+    axis.text.y = element_text(size = 20), # Axis titles
+    axis.text.x = element_text(size = 20), # Axis titles
+    legend.text = element_text(size = 22),  # Legend text
+    strip.text.x = element_text(size=22),
+    plot.title = element_text(size=22),
+    legend.position = "none"
+  ) 
 
-ggsave(file.path(outputFolder, "plots", "FWDcorrAge.png"),
-       width = 16, height = 10, units = "cm")
-
-## look at dif between modalities
-meanFWDrun$modality <- "av"
-meanFWDrun$stimType <- "env"
-
-meanFWDrun$modality[grepl("TV",meanFWDrun$logfile)] <- "tv"
-meanFWDrun$stimType[grepl("TV",meanFWDrun$logfile)] <- "tact"
-
-meanFWDrun$stimType[grepl("Aset4",meanFWDrun$logfile) | 
-                      grepl("Aset5",meanFWDrun$logfile) |
-                      grepl("Aset6",meanFWDrun$logfile)] <- "syll"
-
-
-meanFWDMod <- meanFWDrun %>% 
-  select(ID, stimType, meanFWDValue) %>% 
-  group_by(ID, stimType) %>% 
-  summarise(meanFWD = mean(meanFWDValue, na.rm = TRUE)) %>% 
-  left_join(., demo[,c('ID', 'age')], by = join_by(ID)) %>% 
-  filter(!is.na(age), stimType != "syll")
-
-summary(lm(meanFWD ~ age + stimType, meanFWDMod))
-anova(lm(meanFWD ~ age + stimType, meanFWDMod))
-report(anova(lm(meanFWD ~ age + stimType, meanFWDMod)))
-
-t.test(meanFWDMod$meanFWD[meanFWDMod$stimType=="env"], 
-       meanFWDMod$meanFWD[meanFWDMod$stimType=="tact"])
-
-report(t.test(meanFWDMod$meanFWD[meanFWDMod$stimType=="env"], 
-              meanFWDMod$meanFWD[meanFWDMod$stimType=="tact"]))
-
-ggplot(meanFWDMod, aes(stimType, meanFWD, group = stimType)) +
-  # geom_point() +
-  # stat_smooth(method = "lm") +
-  # facet_wrap(~stimType) +
-  geom_boxplot() +
-  ggtitle("Mean Framewise Displacement Values and Age") 
-
-ggsave(file.path(outputFolder, "plots", "FWDcorrAge.png"),
-       width = 16, height = 10, units = "cm")
-
+ggsave(file.path(outputFolder, "figures", "FWDcorrAge.tif"),
+       width = 24, height = 15, units = "cm")

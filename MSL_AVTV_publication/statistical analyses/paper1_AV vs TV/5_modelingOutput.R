@@ -1,28 +1,19 @@
 ##########################################################
-##                        PREPARE                       ##
-##########################################################
-## Description :: 
-## Input :::::::: 
-## Libraries :::: 
-## Output ::::::: 
+##                     Modelling                        ##
 ##########################################################
 
 # Load and merge data ------------------------------------
 ##########################################################
 
 ## get the file names ####
-subjects <- list.files(path = modelingFolder, pattern = "CBC_")
-subjects <- subjects[nchar(subjects)==8 & subjects!="CBC_555" & subjects!="CBC_ϩ"] #simulated subjects have shorter names
+subjects <- read_csv(file.path(outputFolder, 'finalSubjects.csv'))
+subjects <- subjects$ID
 
 fileNames <- list.files(paste(modelingFolder, sep = "/"), full.names = T, recursive = T)
 fileNames <- fileNames %>% 
   keep(str_detect(.,'4_csv')) %>% 
-  #discard(str_detect(.,'2Step')) %>% 
   keep(str_detect(.,'Dfit')) %>% 
-  discard(str_detect(.,'uniATsimpleRW')) %>% 
-  discard(str_detect(.,'uniVsimpleRW')) %>% 
-  discard(str_detect(., 'CBCdriftDiffusionLR_pwBelief')) %>% 
-  keep(str_detect(.,'CBCsimpleRW_CBCdriftDiffusionLR.'))
+  keep(str_detect(.,'CBCsimpleRW_CBCdriftDiffusionLR.csv'))
 
 fileNames <- fileNames[sapply(fileNames, function(a) any(str_detect(a, paste(subjects,"_", sep = ""))))]
 
@@ -45,28 +36,6 @@ for (i in 1:length(modelingDataList)) {
     rename_with(~ "fit_startBelief", matches("^fit.*startBelief$")) %>% 
     rename_with(~ "fit_alpha1", matches("^fit.*alpha1$"))  %>% 
     rename_with(~ "fit_NLL", matches("^fit.*NLL$"))
-  
-  if (grepl("sigmoid", fileNames[i], ignore.case = T)) {
-    tempData <- tempData%>% 
-      rename_with(~ "fit_beta", matches("^fit.*beta$"))
-  }
-  
-  # rename variables so that they are uniform for each modeling output
-  if (grepl("both", fileNames[i], ignore.case = T)) {
-    tempData <- tempData %>% 
-      rename_with(~ "fit_alpha2", matches("^fit.*alpha2$"))
-  }
-  
-  if (grepl("CBCpearceHall_", fileNames[i])) {
-    tempData <- tempData %>% 
-      rename_with(~ "fit_delta1", matches("^fit.*delta$"))
-  }
-  
-  if (grepl("CBCpearceHallBoth", fileNames[i])) {
-    tempData <- tempData %>% 
-      rename_with(~ "fit_delta1", matches("^fit.*delta1$")) %>% 
-      rename_with(~ "fit_delta2", matches("^fit.*delta2$"))
-  }
   
   if (grepl("CBCdriftDiffusion", fileNames[i])) {
     tempData <- tempData %>% 
@@ -165,34 +134,6 @@ modelingSummary <- modelingSummary %>%
 ## write data ####
 write_csv(modelingSummary, file = paste(outputFolder, "modelling", "modelingSummary.csv", sep = "/"))
 
-
-## plot Modelfit per subject ----
-pdf(file.path(outputFolder, 'modelling/allsubs_new.pdf'))
-for (i in 1:length(subjects)) {
-  tempSum <- modelingSummary %>%
-    filter(ID == subjects[i]) %>%
-    group_by(session)
-  
-  plot1 <- ggplot(tempSum, aes(x = model, y =AIC, fill = model))+
-    geom_col(position = "dodge") +
-    facet_wrap(~session) + 
-    #scale_fill_discrete(labels=c("uniModalV", "simpleRW_norm", "simpleRW_pw",
-    #                             "bothRW_norm", "bothRW_pw"))+
-    ggtitle(subjects[i])
-  
-  print(plot1)
-  #ggsave(paste('/Plots/', subjects[i], '_AIC.png', sep=""),plot=plot1)
-  
-  plot2 <- ggplot(tempSum, aes(x = model, y =BIC, fill = model))+
-    geom_col(position = "dodge") +
-    facet_wrap(~session) + 
-    # scale_fill_discrete(labels=c("uniModalV", "simpleRW_norm", "simpleRW_pw",
-    #                              "bothRW_norm", "bothRW_pw"))+
-    ggtitle(subjects[i])
-  print(plot2)
-}
-dev.off()
-
 # analyses Modeling ----
 # correlation alpha with accuracy
 load(file.path(outputFolder, "data_childrenMR.RData"))
@@ -223,16 +164,9 @@ modelSelection <- modelingSummary %>%
   left_join(.,demo[,c("ID", "age")], by = join_by(ID))
 
 save(modelSelection, file = file.path(outputFolder, "modelSelection.RData"))
-            
-cor.test(modelSelection$alpha, modelSelection$mAcc)  
-
-ggplot(modelSelection, aes(alpha, mAcc)) +
-  geom_point() +
-  stat_smooth() + 
-  facet_wrap(~mod2Type)
 
 # learning rate and modality
-alphaLM <- lmer(alpha ~ mod2Type + age + (1|ID), data=modelSelection)
+alphaLM <- lmer(alpha ~ mod2Type * age + (1|ID), data=modelSelection)
 
 summary(alphaLM)
 anova(alphaLM)
@@ -240,7 +174,6 @@ report(anova(alphaLM))
 
 lmTable <- nice_table(as.data.frame(report_table(alphaLM)),
                       title = "Linear Mixed Model for Learning Rate and Modality", note = "ABC", 
-                      #col.format.custom = c(2:6, 11:13), format.custom = "fun",
                       highlight = T)
 lmTable
 print(lmTable, preview = "docx")
@@ -253,14 +186,15 @@ ggsave(file.path(outputFolder, "modelling", "LearningRateModality.png"))
 
 # non-decision time and modality
 TerLM <- lmer(nonDecisionTime ~ mod2Type + age + (1|ID), data=modelSelection)
+TerLM2 <- lmer(nonDecisionTime ~ mod2Type * age + (1|ID), data=modelSelection)
 
+anova(TerLM, TerLM2)
 anova(TerLM)
 report(anova(TerLM))
 summary(TerLM)
 
 lmTable <- nice_table(as.data.frame(report_table(TerLM)),
                       title = "Linear Mixed Model for non-decision time and Modality", note = "ABC", 
-                      #col.format.custom = c(2:6, 11:13), format.custom = "fun",
                       highlight = T)
 lmTable
 print(lmTable, preview = "docx")
@@ -272,34 +206,47 @@ ggplot(modelSelection, aes(modality, nonDecisionTime, group=modality, fill = mod
   geom_violin(alpha = 0.8) +
   geom_boxplot(alpha = 0, width =0.2) +
   scale_fill_manual(values = viridis(n=2, begin = 0.2, end = 0.8)) +
-  #geom_jitter(width = 0.1) +
-  #ggtitle("Non-Decision Time and Modality") + 
+  ggtitle("") + 
   ylab("Non-Decision Time") + xlab("Modality") +
   geom_signif(
     comparisons = list(c("AV", "TV")),
     map_signif_level = TRUE,
-    y_position = c(1.1), # Adjust y positions for the lines
+    y_position = c(1.08), # Adjust y positions for the lines
     annotations = c(".004**"), # Corresponding significance levels
-    textsize = 4,
+    textsize = 8,
     tip_length = 0,
-    vjust = 0.2,
+    vjust = 0,
     color = "black") +
   jtools::theme_apa(remove.y.gridlines = F) + scale_y_continuous(expand = c(0, 0), limits=c(0.2,1.2)) +
-  theme(text = element_text(size = 25, family = "Source Sans Pro"))
+  theme(#text = element_text(size = 25),  # Increases all text
+    axis.title.y = element_text(size = 22), # Axis titles
+    axis.title.x = element_text(size = 22), # Axis titles
+    axis.text.y = element_text(size = 20), # Axis titles
+    axis.text.x = element_text(size = 20), # Axis titles
+    legend.text = element_text(size = 22),  # Legend text
+    legend.title = element_text(size = 22)  # Legend title
+  )
 
 ggsave(file.path(outputFolder, "figures", "nonDecisionTimeModality.png"),
        width = 24, height = 15, units = "cm")
 
+ggsave(file.path(outputFolder, "figures", "nonDecisionTimeModality.svg"),
+       width = 24, height = 15, units = "cm")
+
+ggsave(file.path(outputFolder, "figures", "nonDecisionTimeModality.tif"),
+       width = 24, height = 15, units = "cm")
+
 # boundary and modality
 boundLM <- lmer(boundary ~ mod2Type + age + (1|ID), data=modelSelection)
+boundLM2 <- lmer(boundary ~ mod2Type * age + (1|ID), data=modelSelection)
 
+anova(boundLM, boundLM2)
 anova(boundLM)
 report(anova(boundLM))
 summary(boundLM)
 
 lmTable <- nice_table(as.data.frame(report_table(boundLM)),
                       title = "Linear Mixed Model for Boundary and Modality", note = "ABC", 
-                      #col.format.custom = c(2:6, 11:13), format.custom = "fun",
                       highlight = T)
 lmTable
 print(lmTable, preview = "docx")
@@ -309,21 +256,34 @@ ggplot(modelSelection, aes(modality, boundary, group=modality, fill = modality))
   geom_boxplot(alpha = 0, width =0.2) +
   scale_fill_manual(values = viridis(n=2, begin = 0.2, end = 0.8)) +
   #geom_jitter(width = 0.1, color = "darkgrey") +
-  #ggtitle("Boundary and Modality") +
+  ggtitle("") +
   ylab("Boundary Separation") + xlab("Modality") +
   geom_signif(
     comparisons = list(c("AV", "TV")),
     map_signif_level = TRUE,
-    y_position = c(4.6), # Adjust y positions for the lines
+    y_position = c(4.58), # Adjust y positions for the lines
     annotations = c("<.001***"), # Corresponding significance levels
-    textsize = 4,
+    textsize = 8,
     tip_length = 0,
-    vjust = 0.2,
+    vjust = 0,
     color = "black") +
   jtools::theme_apa(remove.y.gridlines = F) + scale_y_continuous(expand = c(0, 0), limits=c(1,5)) +
-  theme(text = element_text(size = 25))
+  theme(#text = element_text(size = 25),  # Increases all text
+    axis.title.y = element_text(size = 22), # Axis titles
+    axis.title.x = element_text(size = 22), # Axis titles
+    axis.text.y = element_text(size = 20), # Axis titles
+    axis.text.x = element_text(size = 20), # Axis titles
+    legend.text = element_text(size = 22),  # Legend text
+    legend.title = element_text(size = 22)  # Legend title
+  )
 
 ggsave(file.path(outputFolder, "figures", "boundaryModality.png"),
+       width = 24, height = 15, units = "cm")
+
+ggsave(file.path(outputFolder, "figures", "boundaryModality.svg"),
+       width = 24, height = 15, units = "cm")
+
+ggsave(file.path(outputFolder, "figures", "boundaryModality.tif"),
        width = 24, height = 15, units = "cm")
 
 # drift rate
@@ -369,12 +329,11 @@ report(anova(driftLM4))
 
 lmTable <- nice_table(as.data.frame(report_table(driftLM4)),
                       title = "Linear Mixed Model for Drift Rate and Modality", note = "ABC", 
-                      #col.format.custom = c(2:6, 11:13), format.custom = "fun",
                       highlight = T)
 lmTable
 print(lmTable, preview = "docx")
 
-driftLM2PH <- emmeans::emmeans(driftLM4, "bin", data=modDataSumm)
+driftLM2PH <- emmeans::emmeans(driftLM4, pairwise ~ bin, data=modDataSumm)
 pairs(driftLM2PH)
 
 lmPHTable <- nice_table(as.data.frame(pairs(driftLM2PH)),
@@ -389,27 +348,40 @@ ggplot(modDataSumm, aes(bin, absMDriftRate, fill = modality)) +
   introdataviz::geom_split_violin(alpha = 0.8, width = 1.2) +
   geom_boxplot(width = 0.3, alpha = 0) +
   geom_line(data= meanDriftFourthsPlot, aes(x=bin, y = absMDriftRate, group = modality, 
-                                         linetype = modality, color = modality), 
+                                            linetype = modality, color = modality), 
             linewidth = 1.2)  +
-  scale_linetype_manual(values=c("longdash", "dotted")) +
+  scale_linetype_manual(values=c("longdash", "dotdash")) +
   scale_fill_manual(values = viridis(n=2, begin = 0.2, end = 0.8)) +
   scale_color_manual(values = viridis(n=2, begin = 0.2, end = 0.8)) +
-  #ggtitle("Drift Rate and Modality") +
+  ggtitle("") +
   geom_signif(
     comparisons = list(c("1", "2"), c("1", "3"), c("1", "4"), c("2", "3"),
-                       c("2", "4"), c("2", "4")),
+                       c("2", "4"), c("3", "4")),
     map_signif_level = TRUE,
-    y_position = c(1.3, 1.4, 1.5, 1.6, 1.7, 1.8), # Adjust y positions for the lines
+    y_position = c(1.2, 1.4, 1.6, 1.8, 2.0, 2.2), # Adjust y positions for the lines
     annotations = c("<.001***", "<.001***", "<.001***", "<.001***", "<.001***",".001**"), # Corresponding significance levels
-    textsize = 3,
+    textsize = 7,
     tip_length = 0,
-    vjust = 0.2,
+    vjust = 0,
     color = "black") +
   ylab("absolute Drift Rate") + 
-  jtools::theme_apa(remove.y.gridlines = F) + scale_y_continuous(expand = c(0, 0), limits = c(0, 2)) +
-  theme(text = element_text(size = 25)) 
+  jtools::theme_apa(remove.y.gridlines = F) + scale_y_continuous(expand = c(0, 0), limits = c(0, 2.5)) +
+  theme(#text = element_text(size = 25),  # Increases all text
+    axis.title.y = element_text(size = 22), # Axis titles
+    axis.title.x = element_text(size = 22), # Axis titles
+    axis.text.y = element_text(size = 20), # Axis titles
+    axis.text.x = element_text(size = 20), # Axis titles
+    legend.text = element_text(size = 22),  # Legend text
+    legend.title = element_text(size = 22)  # Legend title
+  ) 
 
 ggsave(file.path(outputFolder, "figures", "driftRateModalityFourths.png"),
+       width=24, height = 15, units = "cm")
+
+ggsave(file.path(outputFolder, "figures", "driftRateModalityFourths.svg"),
+       width=24, height = 15, units = "cm")
+
+ggsave(file.path(outputFolder, "figures", "driftRateModalityFourths.tif"),
        width=24, height = 15, units = "cm")
 
 DRmodAge <- selectedData %>% 
@@ -423,20 +395,34 @@ DRmodAge <- selectedData %>%
             mAcc = mean(trials_runs.correct_answer))
 
 ggplot(DRmodAge, aes(age, absMDriftRate, color=modality)) +
-  #geom_violin() +
   geom_point() +
-  geom_smooth(method = "lm")+
+  geom_smooth(method = "lm", linewidth = 1.2, aes(linetype = modality))+
+  scale_linetype_manual(values=c("longdash", "dotdash")) +
   scale_color_manual(values = viridis(n=2, begin = 0.2, end = 0.8)) +
   facet_grid(~bin) +
-  #ggtitle("Drift Rate and Modality") +
+  ggtitle("") +
   ylab("absoulte Drift Rate") +
-  jtools::theme_apa(remove.y.gridlines = F) + scale_y_continuous(expand = c(0, 0), limits = c(0, 2)) +
-  theme(text = element_text(size = 25))  
+  jtools::theme_apa(remove.y.gridlines = F) + scale_y_continuous(expand = c(0, 0), limits = c(0, 2.5)) +
+  theme(#text = element_text(size = 25),  # Increases all text
+    axis.title.y = element_text(size = 22), # Axis titles
+    axis.title.x = element_text(size = 22), # Axis titles
+    axis.text.y = element_text(size = 20), # Axis titles
+    axis.text.x = element_text(size = 20), # Axis titles
+    legend.text = element_text(size = 22),  # Legend text
+    legend.title = element_text(size = 22),  # Legend title
+    strip.text.x = element_text(size=22)
+  )   
 
 ggsave(file.path(outputFolder, "figures", "driftRateModalityAge.png"),
        width=24, height = 15, units = "cm")
 
+ggsave(file.path(outputFolder, "figures", "driftRateModalityAge.svg"),
+       width=24, height = 15, units = "cm")
+
 ggsave(file.path(outputFolder, "figures", "driftRateModalityAge.eps"),
+       width=159, height = 105, units = "mm")
+
+ggsave(file.path(outputFolder, "figures", "driftRateModalityAge.tif"),
        width=159, height = 105, units = "mm")
 
 DRmodAge2 <- selectedData %>% 
@@ -450,163 +436,23 @@ DRmodAge2 <- selectedData %>%
             mAcc = mean(trials_runs.correct_answer))
 
 ggplot(DRmodAge2, aes(age, absMDriftRate, color=modality)) +
-  #geom_violin() +
   geom_point() +
-  geom_smooth(method = "lm")+
-  #stat_cor(digits = 2, p.accuracy = .001)+
+  geom_smooth(method = "lm", linewidth = 1.2, aes(linetype = modality))+
+  scale_linetype_manual(values=c("longdash", "dotdash")) +
   scale_color_manual(values = viridis(n=2, begin = 0.2, end = 0.8)) +
-  #facet_grid(~bin) +
-  #ggtitle("Drift Rate and Modality") +
+  ggtitle("") +
   ylab("absoulte Drift Rate") +
   jtools::theme_apa(remove.y.gridlines = F) + scale_y_continuous(expand = c(0, 0), limits = c(0, 2)) +
-  theme(text = element_text(size = 25))  
+  theme(#text = element_text(size = 25),  # Increases all text
+    axis.title.y = element_text(size = 22), # Axis titles
+    axis.title.x = element_text(size = 22), # Axis titles
+    axis.text.y = element_text(size = 20), # Axis titles
+    axis.text.x = element_text(size = 20), # Axis titles
+    legend.text = element_text(size = 22),  # Legend text
+    legend.title = element_text(size = 22),  # Legend title
+    strip.text.x = element_text(size=22)
+  )    
 
 ggsave(file.path(outputFolder, "figures", "driftRateModalityAgeRun.eps"),
        width=159, height = 105, units = "mm")
-
-################################################################################
-# Value and Accuracy
-valData <- selectedData %>% 
-  select(ID, session, bin, modality, age, "0A belief", "1B belief", "2C belief", "3D belief") %>% 
-  filter(bin == 4) %>% 
-  group_by(ID, modality, age) %>% 
-  summarise(across(c("0A belief", "1B belief", "2C belief", "3D belief"), mean, na.rm = TRUE)) %>% 
-  mutate(meanVal = rowMeans(across(c("0A belief", "1B belief", "2C belief", "3D belief"))))
-
-meanAccuracy <- selectedData %>% 
-  select(ID, session, modality, choiceAccurate, reactionTime) %>% 
-  group_by(ID, modality) %>% 
-  summarise(mACC = mean(choiceAccurate, na.rm = T),
-            mRT = mean(reactionTime, na.rm = T))
-  
-valData <- valData %>% 
-  left_join(., meanAccuracy, by = join_by(ID, modality))
-
-plot(valData$mACC, valData$meanVal)
-plot(valData$age, valData$meanVal)
-
-ggplot(valData, aes(x=age, y=meanVal, group = modality, color = modality)) +
-  geom_point() +
-  geom_smooth(method = "lm")
-
-ggplot(valData, aes(x=mACC, y=meanVal, group = modality, color = modality)) +
-  geom_point() +
-  geom_smooth(method = "lm")
-
-valLM <- lmer(meanVal ~ modality + age + mACC + mRT + (1|ID), data=valData)
-summary(valLM)
-
-valData2 <- selectedData %>% 
-  select(ID, session, bin, modality, age, trial, "0A belief", "1B belief", "2C belief", "3D belief") %>% 
-  group_by(ID, session, modality, age) %>% 
-  filter(trial == max(trial)) %>%  # Select only the last trial in each session
-  group_by(ID, modality, age) %>%
-  summarise(across(c("0A belief", "1B belief", "2C belief", "3D belief"), mean, na.rm = TRUE)) %>% 
-  mutate(meanVal = rowMeans(across(c("0A belief", "1B belief", "2C belief", "3D belief"))))
-
-valData2 <- valData2 %>% 
-  left_join(., meanAccuracy, by = join_by(ID, modality))
-
-plot(valData2$mACC, valData2$meanVal)
-plot(valData2$age, valData2$meanVal)
-
-ggplot(valData2, aes(x=age, y=meanVal, group = modality, color = modality)) +
-  geom_point() +
-  geom_smooth(method = "lm")
-
-ggplot(valData2, aes(x=mACC, y=meanVal, group = modality, color = modality)) +
-  geom_point() +
-  geom_smooth(method = "lm")
-
-valLM2 <- lmer(meanVal ~ modality + age + (1|ID), data=valData2)
-summary(valLM2)
-
-valLM2 <- lmer(meanVal ~ modality + age + mACC + mRT + (1|ID), data=valData2)
-summary(valLM2)
-
-################################################################################
-# combine parameters and accuracies ----
-learningLM <- lmer(mAcc ~ mod2Type + age + alpha + nonDecisionTime + boundary + (1|ID), data=modelSelection)
-summary(learningLM)
-report(anova(learningLM))
-
-lmTable <- nice_table(as.data.frame(report_table(learningLM)),
-                      title = "Linear Mixed Model for Drift Rate and Modality", note = "ABC", 
-                      #col.format.custom = c(2:6, 11:13), format.custom = "fun",
-                      highlight = T)
-lmTable
-print(lmTable, preview = "docx")
-
-ggplot(modelSelection, aes(y=mAcc, x=boundary, color=modality)) +
-  #geom_violin() +
-  geom_point() +
-  geom_smooth(method = "lm", fullrange = TRUE)+
-  ggtitle("Accuracies depending on Boundaries") + ylab("accuracy") +
-  jtools::theme_apa(remove.y.gridlines = F) + scale_y_continuous(expand = c(0, 0), limits = c(0, 1)) +
-  theme(text = element_text(size = 20))
-
-ggsave(file.path(outputFolder, "modelling", "boundaryAccuracy.png"),
-       width=24, height = 15, units = "cm")
-
-ggplot(modelSelection, aes(age, mAcc, color=modality)) +
-  #geom_violin() +
-  geom_point() +
-  geom_smooth(method = "lm")+
-  ggtitle("Accuracies depending on Age") + ylab("accuracy") +
-  jtools::theme_apa(remove.y.gridlines = F) + scale_y_continuous(expand = c(0, 0), limits = c(0, 1)) +
-  theme(text = element_text(size = 20))
-
-ggsave(file.path(outputFolder, "modelling", "boundaryAge.png"),
-       width=24, height = 15, units = "cm")
-
-learningDriftLM <- lmer(mAcc ~ modality + age + bin * absMDriftRate + (1|ID), data=modDataSumm)
-lmerTest::step(lmer(mAcc ~ modality * age * bin * absMDriftRate + (1|ID), data=modDataSumm))
-summary(learningDriftLM)
-report(anova(learningDriftLM))
-
-lmTable <- nice_table(as.data.frame(report_table(learningDriftLM)),
-                      title = "Linear Mixed Model for Drift Rate and Modality", note = "ABC", 
-                      #col.format.custom = c(2:6, 11:13), format.custom = "fun",
-                      highlight = T)
-lmTable
-print(lmTable, preview = "docx")
-
-learningDriftPH <- pairs(emmeans::emmeans(learningDriftLM, ~ bin), adjust = "tukey")
-plot(pairs(emmeans::emmeans(learningDriftLM, ~ bin), adjust = "tukey"))
-
-lmPHTable <- nice_table(as.data.frame(learningDriftPH),
-                        title = "Post-hoc tests for Drift Rates and Fourths", note = "ABC", 
-                        col.format.custom = 2:5, format.custom = "fun2",
-                        #col.format.custom = 6, format.custom = "fun3",
-                        highlight = T)
-lmPHTable
-print(lmPHTable, preview = "docx")
-
-ggplot(modDataSumm, aes(y=mAcc, x=absMDriftRate, color=modality)) +
-  #geom_violin() +
-  geom_point() +
-  geom_smooth(method = "lm")+
-  ggtitle("Accuracies depending on Boundaries")
-
-ggplot(modDataSumm, aes(x = absMDriftRate, y = mAcc, color = bin)) +
-  geom_point(alpha = 0.6) +
-  geom_smooth(method = "lm", se = FALSE, fullrange =T) +  # Linear trends for each level of fourths
-  theme_minimal() +
-  labs(title = "Effect of Fourths and absMDriftRate on Mean Accuracy",
-       x = "absMDriftRate", y = "Mean Accuracy")
-
-ggplot(modDataSumm, aes(x = absMDriftRate, y = mAcc)) +
-  geom_point(aes(color =  modality), alpha = 0.6) +
-  geom_smooth(color = "navy", method = "lm", se = FALSE, fullrange=T, linewidth = 1) +  # One line per plot
-  facet_grid( ~ bin) +  # Separate plot for each fourth
-  ylim(0,1) +
-  labs(title = "Effect of absolute Drift RAte on Mean Accuracy by Fourths",
-       x = "absMDriftRate", y = "Mean Accuracy") +
-  jtools::theme_apa(remove.y.gridlines = F) + scale_y_continuous(expand = c(0, 0), limits = c(0, 1)) +
-  theme(text = element_text(size = 20))
-
-ggsave(file.path(outputFolder, "modelling", "driftRateAccuracy.png"),
-       width=24, height = 15, units = "cm")  
-
-
 

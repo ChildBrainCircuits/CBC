@@ -1,10 +1,5 @@
 ##########################################################
-##                        PREPARE                       ##
-##########################################################
-## Description :: 
-## Input :::::::: 
-## Libraries :::: 
-## Output ::::::: 
+##                     SIMULATION                       ##
 ##########################################################
 
 # Load and merge data ------------------------------------
@@ -17,10 +12,9 @@ subjects <- subjects[nchar(subjects)<8 & subjects!="CBC_555" & subjects!="CBC_ϩ
 fileNames <- list.files(paste(modelingFolder, sep = "/"), full.names = T, recursive = T)
 fileNames <- fileNames %>% 
   keep(str_detect(.,'4_csv')) %>% 
-  #discard(str_detect(.,'2Step')) %>% 
   keep(str_detect(.,'Dfit')) %>% 
-  #discard(str_detect(.,'uniATsimpleRW'))
-  keep(str_detect(.,'driftDiffusion'))
+  keep(str_detect(.,'simpleRW')) %>% 
+  discard(str_detect(.,'pwBelief'))
 
 fileNames <- fileNames[sapply(fileNames, function(a) any(str_detect(a, paste(subjects,"_", sep = ""))))]
 
@@ -145,72 +139,6 @@ simulationSummary <- simulationSummary %>%
 ## write data ####
 write_csv(simulationSummary, file = paste(outputFolder, "modelling", "simulationSummary.csv", sep = "/"))
 
-# Compare simulation vs fit ----
-simVars <- simulationSummary %>% 
-  select(starts_with("sim")) %>% 
-  names()
-fitVars <- simulationSummary %>% 
-  select(starts_with("fit")) %>% 
-  names()
-
-output_filename <- paste0(outputFolder, "/modelling/recovery_", gsub("sim_", "", simVars), ".png")
-
-
-for (i in 1:length(simVars)) {
-  ggplot(simulationSummary, aes_string(simVars[i], fitVars[i])) +
-    geom_point() +
-    geom_abline(intercept =0, color = "grey")+
-    #stat_smooth(method = "lm", se = FALSE, color = "light blue") +
-    sm_statCorr() +
-    ggtitle(paste(simVars[i], "vs", fitVars[i])) +
-    facet_wrap(~model) 
-  
-  ggsave(output_filename[i],
-         width = 2700, height = 1765,  units = "px")
-}
-
-
-models <- unique(simulationSummary$model)
-for (i in models){
-  tempSum <- simulationSummary %>% 
-    filter(model == i)
-  
-  simVars <- tempSum %>% 
-    select(starts_with("sim") & !ends_with("startBelief")) %>% 
-    names()
-  fitVars <- tempSum %>% 
-    select(starts_with("fit") & !ends_with("startBelief") &
-             !ends_with("NLL")) %>% 
-    names()
-  
-  for (j in 1:length(simVars)){
-    eval(parse(text=paste0("plot", j, " <- ggplot(tempSum, aes(x = ", simVars[j],
-                ", y = ", fitVars[j], ")) + geom_point(color = 'grey') + ",
-                "geom_abline(intercept =0, color = 'grey') +",
-                "sm_statCorr() +",
-                "ggtitle('", simVars[j], " vs. ", fitVars[j], "')")))
-  }
-  
-  
-  g <- arrangeGrob(plot1, plot2, plot3, plot4, plot5, ncol = 2,
-                   top = grid::textGrob(i,gp=grid::gpar(fontsize=10,font=1)))
-  
-  ggsave(paste0(outputFolder, "/modelling/", i, "_SP.png"),g,
-         width = 2000, height = 3000,  units = "px")
-  
-  corr_matrix <- cor(tempSum[, c(simVars, fitVars)])
-  corr_matrix[lower.tri(corr_matrix, diag = T)] <- NA
-  
-  ggcorrplot::ggcorrplot(corr_matrix,
-                         lab = TRUE,  outline.color = "light grey", 
-                         colors = RColorBrewer::brewer.pal(n = 3, name = "RdYlBu"),
-                         title = i)
-
-  ggsave(paste0(outputFolder, "/modelling/", i, "_CP.png"),
-         width = 2700, height = 1765,  units = "px")
-  
-}
-
 ## recovery for paper 1 ----
 simulationSummary <- read_csv(file = paste(outputFolder, "modelling", "simulationSummary.csv", sep = "/"))
 
@@ -230,7 +158,6 @@ for (j in 1:length(simVars)){
   eval(parse(text=paste0("plot", j, " <- ggplot(tempSum, aes(x = ", simVars[j],
                          ", y = ", fitVars[j], ")) + geom_point(color = 'grey') + ",
                          "geom_abline(intercept =0, color = 'grey') +",
-                         # "sm_statCorr(label_x = 0.01, label_y = 0.95, text_size = 5) +",
                          "ggtitle('", simVars[j], " vs. ", fitVars[j], "')")))
 }
 
@@ -279,13 +206,8 @@ plot4 <- plot4 +
         plot.background = element_blank())
 
 g <- ggarrange(plot1, plot2, plot3, plot4, ncol = 2, nrow = 2, align = "hv",
-               widths = c(0.9, 0.9), heights = c(1, 1)
-          #font.label = "bold", labels = c("A", "B", "C", "D")
-          ) 
+               widths = c(0.9, 0.9), heights = c(1, 1)) 
 
-# finalPlot <- annotate_figure(g,
-#                 top = text_grob("Parameter Recovery Results", face = "bold", size = 18,
-#                                 hjust = 0, x=0.01)) 
 finalPlot <- g + 
   theme(plot.background = element_rect(fill = "white", color = NA))
 finalPlot
@@ -297,10 +219,7 @@ corr_matrix <- cor(tempSum[, c(simVars, fitVars)])
 corr_matrix[lower.tri(corr_matrix, diag = T)] <- NA
 
 ggcorrplot::ggcorrplot(corr_matrix,
-                       lab = TRUE,  outline.color = "light grey", lab_col = "white",
-                       #colors = viridis(2, option = "viridis"),
-                       #title = "Correlation Plot for Simulated and Recovered Parameter Values"
-                       ) +
+                       lab = TRUE,  outline.color = "light grey", lab_col = "white") +
   scale_fill_gradientn(colors = viridis(256, option = 'viridis', direction = -1)) +
   theme_minimal() +  # Minimal theme for clean background
   theme(axis.title = element_blank(),   # Remove axis titles
@@ -310,16 +229,12 @@ ggcorrplot::ggcorrplot(corr_matrix,
         legend.position = "right",
         text = element_text(size = 15))   # Remove gridlines
 
-
 ggsave(paste0(outputFolder, "/figures/CorrelationSimFitDDMn.png"),
        width = 19, height = 19,  units = "cm")
-
 
 # check NLL for min/max ----
 simulationSummaryShort <- simulationSummary %>% 
   filter(!is.na(fit_delta1), !is.na(fit_NLL), !is.na(fit_alpha1))
-  #filter(str_detect(percModel, "pearceHall"))
-
 
 plot(simulationSummary$fit_delta1, simulationSummary$fit_NLL)
 plot(simulationSummary$fit_delta2, simulationSummary$fit_NLL)
