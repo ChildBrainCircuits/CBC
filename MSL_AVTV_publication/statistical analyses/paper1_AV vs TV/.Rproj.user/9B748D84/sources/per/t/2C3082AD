@@ -1,0 +1,27 @@
+{
+    "id": "2C3082AD",
+    "path": "B:/Data/CBC_Data/analyses/multisensory_nr/scripts/children_MR/R/paper1_AV vs TV/5_modelingOutput.R",
+    "project_path": "5_modelingOutput.R",
+    "type": "r_source",
+    "hash": "3607606690",
+    "contents": "",
+    "dirty": false,
+    "created": 1738679535024.0,
+    "source_on_save": false,
+    "relative_order": 2,
+    "properties": {
+        "tempName": "Untitled1",
+        "source_window_id": "",
+        "Source": "Source",
+        "cursorPosition": "495,0",
+        "scrollLine": "474"
+    },
+    "folds": "",
+    "lastKnownWriteTime": 1738681742,
+    "encoding": "UTF-8",
+    "collab_server": "",
+    "source_window": "",
+    "last_content_update": 1738681743033,
+    "read_only": false,
+    "read_only_alternatives": []
+}
