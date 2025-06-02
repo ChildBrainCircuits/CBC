@@ -1,0 +1,34 @@
+<?xml version='1.0' encoding='UTF-8' ?>
+<svg xmlns='http://www.w3.org/2000/svg' xmlns:xlink='http://www.w3.org/1999/xlink' class='svglite' width='181.42pt' height='113.39pt' viewBox='0 0 181.42 113.39'>
+<defs>
+  <style type='text/css'><![CDATA[
+    .svglite line, .svglite polyline, .svglite polygon, .svglite path, .svglite rect, .svglite circle {
+      fill: none;
+      stroke: #000000;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+      stroke-miterlimit: 10.00;
+    }
+    .svglite text {
+      white-space: pre;
+    }
+  ]]></style>
+</defs>
+<rect width='100%' height='100%' style='stroke: none; fill: none;'/>
+<defs>
+  <clipPath id='cpMC4wMHwxODEuNDJ8MC4wMHwxMTMuMzk='>
+    <rect x='0.00' y='0.00' width='181.42' height='113.39' />
+  </clipPath>
+</defs>
+<g clip-path='url(#cpMC4wMHwxODEuNDJ8MC4wMHwxMTMuMzk=)'>
+<rect x='53.69' y='29.61' width='74.04' height='54.16' style='stroke-width: 1.07; stroke: none; fill: #FFFFFF;' />
+<circle cx='73.57' cy='45.89' r='1.95' style='stroke-width: 0.71; stroke: #414487; stroke-opacity: 0.60; fill: #414487; fill-opacity: 0.60;' />
+<rect x='59.17' y='35.09' width='28.80' height='21.60' style='stroke-width: 0.75; stroke: none; fill: #999999; fill-opacity: 0.40;' />
+<line x1='62.05' y1='45.89' x2='85.09' y2='45.89' style='stroke-width: 2.56; stroke: #414487; stroke-dasharray: 23.90,10.24; stroke-linecap: butt;' />
+<circle cx='73.57' cy='67.49' r='1.95' style='stroke-width: 0.71; stroke: #7AD151; stroke-opacity: 0.60; fill: #7AD151; fill-opacity: 0.60;' />
+<rect x='59.17' y='56.69' width='28.80' height='21.60' style='stroke-width: 0.75; stroke: none; fill: #999999; fill-opacity: 0.40;' />
+<line x1='62.05' y1='67.49' x2='85.09' y2='67.49' style='stroke-width: 2.56; stroke: #7AD151; stroke-dasharray: 3.41,10.24,13.66,10.24; stroke-linecap: butt;' />
+<text x='93.45' y='53.77' style='font-size: 22.00px; font-family: "Arial";' textLength='27.71px' lengthAdjust='spacingAndGlyphs'>AV</text>
+<text x='93.45' y='75.37' style='font-size: 22.00px; font-family: "Arial";' textLength='28.12px' lengthAdjust='spacingAndGlyphs'>TV</text>
+</g>
+</svg>
