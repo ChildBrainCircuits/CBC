@@ -258,7 +258,10 @@ for i=1:length(subject)
         % Select smoothed scans and movement parameters
         matlabbatch{1}.spm.stats.fmri_spec.sess(j).scans = cellstr(spm_select('ExtFPList', data_path, name_data ,Inf));
         nscans=numel(cellstr(spm_select('ExtFPList', data_path, name_data ,Inf)));
-        matlabbatch{1}.spm.stats.fmri_spec.sess(j).multi_reg = cellstr(spm_select('FPList', rp_path, [name_rp '_' currList.run{sess} '_.*.']));
+        
+        %select .txt file containing movement parameters
+        matlabbatch{1}.spm.stats.fmri_spec.sess(j).multi_reg = {spm_select('FPList', rp_path, [name_rp '_' currList.run{sess} '_.*.']); ...
+            spm_select('FPList', rp_path, ['ICAregressors_sess' num2str(currList.sessNR(sess)) '.mat'])};
 
         % Compute the first scan onset time
         index_scan=find(~isnan(logfile_table_all.('trigger_rt')));
@@ -417,8 +420,8 @@ for i=1:length(subject)
     nAV = nRuns.AV(i); 
     nTV = nRuns.TV(i); 
 
-    % Compute the total number of regressors (each AV/TV run has 14 regressors + bad scan regressors)
-    weightsLength = nAV*14 + nTV*14 + sum(nBS); 
+    % Compute the total number of regressors (each AV/TV run has 24 regressors + bad scan regressors)
+    weightsLength = nAV*(14+10) + nTV*(14+10) + sum(nBS); % each AV and TV run have 14 regressors + ICA + 1 regressor for each badscan -> sum of regressors for current subject
     weights = zeros(1, weightsLength); % Initialize contrast weights as zeros
 
     j=1;
@@ -444,7 +447,7 @@ for i=1:length(subject)
          
             wgths = weights;
             wgths(k) = 1;
-            wgths(k+14+nBS(1)) = 1;
+            wgths(k+24+nBS(1)) = 1;
 
             matlabbatch{3}.spm.stats.con.consess{j}.tcon.weights = wgths;
             matlabbatch{3}.spm.stats.con.consess{j}.tcon.sessrep = 'none';
@@ -457,8 +460,8 @@ for i=1:length(subject)
             matlabbatch{3}.spm.stats.con.consess{j}.tcon.name = [task ' ' conditions{k}];
 
             wgths = weights;
-            wgths(k+14+nBS(1)+14+nBS(2)) = 1;
-            wgths(k+14+nBS(1)+14+nBS(2)+14+nBS(3)) = 1;
+            wgths(k+24+nBS(1)+24+nBS(2)) = 1;
+            wgths(k+24+nBS(1)+24+nBS(2)+24+nBS(3)) = 1;
             matlabbatch{3}.spm.stats.con.consess{j}.tcon.weights = wgths;
 
             matlabbatch{3}.spm.stats.con.consess{j}.tcon.sessrep = 'none';
@@ -473,9 +476,9 @@ for i=1:length(subject)
             
             wgths = weights;
             wgths(k) = 1;
-            wgths(k+14+nBS(1)) = 1;
-            wgths(k+14+nBS(1)+14+nBS(2)) = -1;
-            wgths(k+14+nBS(1)+14+nBS(2)+14+nBS(3)) = -1;
+            wgths(k+24+nBS(1)) = 1;
+            wgths(k+24+nBS(1)+24+nBS(2)) = -1;
+            wgths(k+24+nBS(1)+24+nBS(2)+24+nBS(3)) = -1;
             matlabbatch{3}.spm.stats.con.consess{j}.tcon.weights = wgths;
 
             matlabbatch{3}.spm.stats.con.consess{j}.tcon.sessrep = 'none';
@@ -489,9 +492,9 @@ for i=1:length(subject)
             
             wgths = weights;
             wgths(k) = -1;
-            wgths(k+14+nBS(1)) = -1;
-            wgths(k+14+nBS(1)+14+nBS(2)) = 1;
-            wgths(k+14+nBS(1)+14+nBS(2)+14+nBS(3)) = 1;
+            wgths(k+24+nBS(1)) = -1;
+            wgths(k+24+nBS(1)+24+nBS(2)) = 1;
+            wgths(k+24+nBS(1)+24+nBS(2)+24+nBS(3)) = 1;
             matlabbatch{3}.spm.stats.con.consess{j}.tcon.weights = wgths;
 
             matlabbatch{3}.spm.stats.con.consess{j}.tcon.sessrep = 'none';
@@ -506,7 +509,7 @@ for i=1:length(subject)
             
             wgths = weights;
             wgths(k) = 1;
-            wgths(k+14+nBS(1)) = 1;
+            wgths(k+24+nBS(1)) = 1;
             matlabbatch{3}.spm.stats.con.consess{j}.tcon.weights = wgths;
 
             matlabbatch{3}.spm.stats.con.consess{j}.tcon.sessrep = 'none';
@@ -519,7 +522,7 @@ for i=1:length(subject)
             matlabbatch{3}.spm.stats.con.consess{j}.tcon.name = [task ' ' conditions{k}];
 
             wgths = weights;
-            wgths(k+14+nBS(1)+14+nBS(2)) = 1;
+            wgths(k+24+nBS(1)+24+nBS(2)) = 1;
             matlabbatch{3}.spm.stats.con.consess{j}.tcon.weights = wgths;
 
             matlabbatch{3}.spm.stats.con.consess{j}.tcon.sessrep = 'none';
@@ -534,8 +537,8 @@ for i=1:length(subject)
             
             wgths = weights;
             wgths(k) = 0.5;
-            wgths(k+14+nBS(1)) = 0.5;
-            wgths(k+14+nBS(1)+14+nBS(2)) = -1;
+            wgths(k+24+nBS(1)) = 0.5;
+            wgths(k+24+nBS(1)+24+nBS(2)) = -1;
             matlabbatch{3}.spm.stats.con.consess{j}.tcon.weights = wgths;
 
             matlabbatch{3}.spm.stats.con.consess{j}.tcon.sessrep = 'none';
@@ -549,8 +552,8 @@ for i=1:length(subject)
             
             wgths = weights;
             wgths(k) = -0.5;
-            wgths(k+14+nBS(1)) = -0.5;
-            wgths(k+14+nBS(1)+14+nBS(2)) = 1;
+            wgths(k+24+nBS(1)) = -0.5;
+            wgths(k+24+nBS(1)+24+nBS(2)) = 1;
             matlabbatch{3}.spm.stats.con.consess{j}.tcon.weights = wgths;
 
             matlabbatch{3}.spm.stats.con.consess{j}.tcon.sessrep = 'none';
@@ -577,8 +580,8 @@ for i=1:length(subject)
             matlabbatch{3}.spm.stats.con.consess{j}.tcon.name = [task ' ' conditions{k}];
 
             wgths = weights;
-            wgths(k+14+nBS(1)) = 1;
-            wgths(k+14+nBS(1)+14+nBS(2)) = 1;
+            wgths(k+24+nBS(1)) = 1;
+            wgths(k+24+nBS(1)+24+nBS(2)) = 1;
             matlabbatch{3}.spm.stats.con.consess{j}.tcon.weights = wgths;
 
             matlabbatch{3}.spm.stats.con.consess{j}.tcon.sessrep = 'none';
@@ -593,8 +596,8 @@ for i=1:length(subject)
             
             wgths = weights;
             wgths(k) = 1;
-            wgths(k+14+nBS(1)) = -0.5;
-            wgths(k+14+nBS(1)+14+nBS(2)) = -0.5;
+            wgths(k+24+nBS(1)) = -0.5;
+            wgths(k+24+nBS(1)+24+nBS(2)) = -0.5;
             matlabbatch{3}.spm.stats.con.consess{j}.tcon.weights = wgths;
 
             matlabbatch{3}.spm.stats.con.consess{j}.tcon.sessrep = 'none';
@@ -608,8 +611,8 @@ for i=1:length(subject)
             
             wgths = weights;
             wgths(k) = -1;
-            wgths(k+14+nBS(1)) = 0.5;
-            wgths(k+14+nBS(1)+14+nBS(2)) = 0.5;
+            wgths(k+24+nBS(1)) = 0.5;
+            wgths(k+24+nBS(1)+24+nBS(2)) = 0.5;
             matlabbatch{3}.spm.stats.con.consess{j}.tcon.weights = wgths;
 
             matlabbatch{3}.spm.stats.con.consess{j}.tcon.sessrep = 'none';
@@ -636,7 +639,7 @@ for i=1:length(subject)
             matlabbatch{3}.spm.stats.con.consess{j}.tcon.name = [task ' ' conditions{k}];
 
             wgths = weights;
-            wgths(k+14+nBS(1)) = 1;
+            wgths(k+24+nBS(1)) = 1;
             matlabbatch{3}.spm.stats.con.consess{j}.tcon.weights = wgths;
 
             matlabbatch{3}.spm.stats.con.consess{j}.tcon.sessrep = 'none';
@@ -651,7 +654,7 @@ for i=1:length(subject)
             
             wgths = weights;
             wgths(k) = 1;
-            wgths(k+14+nBS(1)) = -1;
+            wgths(k+24+nBS(1)) = -1;
             matlabbatch{3}.spm.stats.con.consess{j}.tcon.weights = wgths;
 
             matlabbatch{3}.spm.stats.con.consess{j}.tcon.sessrep = 'none';
@@ -665,7 +668,7 @@ for i=1:length(subject)
             
             wgths = weights;
             wgths(k) = -1;
-            wgths(k+14+nBS(1)) = 1;
+            wgths(k+24+nBS(1)) = 1;
             matlabbatch{3}.spm.stats.con.consess{j}.tcon.weights = wgths;
 
             matlabbatch{3}.spm.stats.con.consess{j}.tcon.sessrep = 'none';
