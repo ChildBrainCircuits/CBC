@@ -18,6 +18,13 @@ for s = 1:length(sessions)
     Dtemp = D(D.session == sessions(s), :);
 
     getD = 0;
+    
+    % change upper boundary of non-decision time to min(RT)
+    validRTs = Dtemp.reactionTime(Dtemp.reactionTime > 0.200);
+    if ~isempty(validRTs)
+        parms.UB(contains(parms.names, 'nonDecisionTime')) = min(validRTs, [], 'omitnan');
+    end
+    clear validRTs
 
     % function giving out negative loglikelihood
     NLLfun = @(xparms) CBCwrapperForFit(Dtemp, percModel, respModel, parms.nprc, xparms, getD);
@@ -33,14 +40,17 @@ for s = 1:length(sessions)
     getD = 1;
     Dtemp = CBCwrapperForFit(Dtemp, percModel, respModel, parms.nprc, fittedParms, getD);
 
+    % add fitted parameters to the table
+    Dtemp.('fit_percModel') = repmat(percModel, height(Dtemp), 1);
+    Dtemp.('fit_respModel') = repmat(respModel, height(Dtemp), 1);
+
     for i = 1:parms.n
-        Dtemp.(['fit', percModel, '_', respModel, '_', parms.names{i}]) = ...
-            repmat(fittedParms(i), height(Dtemp), 1);
+        Dtemp.(['fit_', parms.names{i}]) = repmat(fittedParms(i), height(Dtemp), 1);
     end
 
-    Dtemp.(['fit_', percModel, '_', respModel, '_NLL']) = ...
-        repmat(NLL, height(Dtemp), 1);
+    Dtemp.('fit_NLL') = repmat(NLL, height(Dtemp), 1);
 
+    % combine in one table
     Ds = [Ds;Dtemp];
 
     toc;

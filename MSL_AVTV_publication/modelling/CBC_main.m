@@ -47,7 +47,7 @@ for iid = 1:length(options.simSubjectIDs)                                       
     
     % ----------- Drift Diffusion, L/R, normalised beliefs ----------
     % Parameters for simulation of simple RW and DDM
-    ze_t = 0.3+rand*0.8; % non-decision time
+    ze_t = 0.2+rand*2.8; % non-decision time
     zStart = 0.5; % 0.5 = in the middle between boundaries
     alpha1 = rand*1; % learning parameter of updating current pair
     startBelief = 0.5; %start Belief
@@ -72,8 +72,8 @@ for iid = 1:length(options.simSubjectIDs)
     
     % ----------- simple RW - drift Diffusion L/R - norm beliefs -----------
     parms.names = {'startBelief', 'alpha1', 'nonDecisionTime', 'weight', 'startingBoundary', 'startingPoint'};
-    parms.LB = [0.5, 0.0, 0.3,  0, 1.0, 0.5];
-    parms.UB = [0.5, 1.0, 1.1, 15, 5.0, 0.5];
+    parms.LB = [0.5, 0.0, 0.2,  0, 1.0, 0.5];
+    parms.UB = [0.5, 1.0, 3.0, 15, 5.0, 0.5];
     parms.nprc = 2;
     parms.n = 6;
     
@@ -106,8 +106,8 @@ for iid = 1:length(options.subjectIDs)
     ID=options.subjectIDs{iid}
     % ----------- simple RW - drift Diffusion L/R - norm beliefs -----------
     parms.names = {'startBelief', 'alpha1', 'nonDecisionTime', 'weight', 'startingBoundary', 'startingPoint'};
-    parms.LB = [0.5, 0, 0.3,  0, 1.0, 0.5];
-    parms.UB = [0.5, 1, 1.1, 15, 5.0, 0.5];
+    parms.LB = [0.5, 0, 0.2,  0, 1.0, 0.5];
+    parms.UB = [0.5, 1, 3.0, 15, 5.0, 0.5];
     parms.nprc = 2;
     parms.n = 6;
     

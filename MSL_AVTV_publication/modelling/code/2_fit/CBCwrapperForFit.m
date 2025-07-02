@@ -18,7 +18,8 @@ D = D(1:end-1,:);
 D.lik(isnan(D.choiceLeft)) = NaN;
 
 % remove outliers from real subjects
-if length(D.ID{1}) == 8
+if length(D.ID(1)) == 8
+%if length(D.ID{1}) == 8
     idx = find(D.reactionTime < (mean(D.reactionTime, 'omitnan') + 3*std(D.reactionTime, 'omitnan')) & ...
         D.reactionTime > 0.200);
     NLL = -sum(log(D.lik(idx)), 'omitnan');    

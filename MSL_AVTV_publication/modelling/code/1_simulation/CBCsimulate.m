@@ -23,11 +23,12 @@ D = [D(1:(end-1), :)];
 
 simparms = [parms.prc, parms.resp];
 
-for i = 1:length(simparms)
-    D.(['sim_', percModel, '_', respModel, '_', parmsNames{i}]) = ...
-        repmat(simparms(i), height(D), 1);
-end
+D.('sim_percModel') = repmat(percModel, height(D), 1);
+D.('sim_respModel') = repmat(respModel, height(D), 1);
 
+for i = 1:length(simparms)
+    D.(['sim_', parmsNames{i}]) = repmat(simparms(i), height(D), 1);
+end
 
 save(details.analysisfile, 'D')
 end
