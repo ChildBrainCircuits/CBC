@@ -13,8 +13,7 @@ fileNames <- list.files(paste(modelingFolder, sep = "/"), full.names = T, recurs
 fileNames <- fileNames %>% 
   keep(str_detect(.,'4_csv')) %>% 
   keep(str_detect(.,'Dfit')) %>% 
-  keep(str_detect(.,'simpleRW')) %>% 
-  discard(str_detect(.,'pwBelief'))
+  keep(str_detect(.,'driftDiffusion'))
 
 fileNames <- fileNames[sapply(fileNames, function(a) any(str_detect(a, paste(subjects,"_", sep = ""))))]
 
@@ -34,75 +33,17 @@ for (i in 1:length(simulationDataList)) {
   rm(tempData)
   
   tempData <- simulationDataList[[i]] %>% 
-    rename_with(~ "sim_startBelief", matches("^sim.*startBelief$")) %>% 
-    rename_with(~ "sim_alpha1", matches("^sim.*alpha1$")) %>% 
-    rename_with(~ "fit_startBelief", matches("^fit.*startBelief$")) %>% 
-    rename_with(~ "fit_alpha1", matches("^fit.*alpha1$"))  %>% 
-    rename_with(~ "fit_NLL", matches("^fit.*NLL$"))
+    as.data.frame()
   
-  if (grepl("sigmoid", fileNames[i], ignore.case = T)) {
-    tempData <- tempData%>% 
-      rename_with(~ "sim_beta", matches("^sim.*beta$")) %>%
-      rename_with(~ "fit_beta", matches("^fit.*beta$"))
+  if (grepl("v1", fileNames[i])) {
+    tempData$version <- "v1"
+    
+  } else if (grepl("v3", fileNames[i])) {
+    tempData$version <- "v3"
+    # converts variables to characters to be able to bind the data frames
+    columns_to_convert <- c("stimPairLeft", "stimPairRight", "chosenPair", "otherPair")
+    tempData[columns_to_convert] <- lapply(tempData[columns_to_convert], as.character)
   }
-  
-  # rename variables so that they are uniform for each modeling output
-  if (grepl("both", fileNames[i], ignore.case = T)) {
-    tempData <- tempData %>% 
-      rename_with(~ "sim_alpha2", matches("^sim.*alpha2$")) %>% 
-      rename_with(~ "fit_alpha2", matches("^fit.*alpha2$"))
-  }
-  
-  if (grepl("CBCpearceHall_", fileNames[i])) {
-    tempData <- tempData %>% 
-      rename_with(~ "sim_delta1", matches("^sim.*delta$")) %>% 
-      rename_with(~ "fit_delta1", matches("^fit.*delta$"))
-  }
-  
-  if (grepl("CBCpearceHallBoth", fileNames[i])) {
-    tempData <- tempData %>% 
-      rename_with(~ "sim_delta1", matches("^sim.*delta$")) %>% 
-      rename_with(~ "fit_delta1", matches("^fit.*delta1$")) %>% 
-      rename_with(~ "sim_delta2", matches("^sim.*delta2$")) %>% 
-      rename_with(~ "fit_delta2", matches("^fit.*delta2$"))
-  }
-  
-  if (grepl("CBCdriftDiffusion", fileNames[i])) {
-    tempData <- tempData %>% 
-      rename_with(~ "sim_startingPoint", matches("^sim.*startingPoint$")) %>% 
-      rename_with(~ "fit_startingPoint", matches("^fit.*startingPoint$")) %>% 
-      rename_with(~ "sim_startingBoundary", matches("^sim.*startingBoundary$")) %>% 
-      rename_with(~ "fit_startingBoundary", matches("^fit.*startingBoundary$")) %>% 
-      rename_with(~ "sim_weight", matches("^sim.*weight$")) %>% 
-      rename_with(~ "fit_weight", matches("^fit.*weight$")) %>% 
-      rename_with(~ "sim_nonDecisionTime", matches("^sim.*nonDecisionTime$")) %>% 
-      rename_with(~ "fit_nonDecisionTime", matches("^fit.*nonDecisionTime$"))
-  }
-  
-  #find the name of the perceptual model in the file name and add it as a variable to the data frame
-  nPercModel <- which(str_detect(strsplit(fileNames[i],"_")[[1]], "RW") | 
-                        str_detect(strsplit(fileNames[i],"_")[[1]], "pearce"))  
-  tempData$percModel <- strsplit(fileNames[i],"_")[[1]][nPercModel]
-  
-  #determine the response model and add it as a variable to the data frame
-  if (grepl("pwBelief", fileNames[i])) {
-    respModel <- paste(strsplit(fileNames[i],"_")[[1]][nPercModel+1], 
-                       strsplit(fileNames[i],"_")[[1]][nPercModel+2],
-                       sep = "_")
-  } else {
-    respModel <- strsplit(fileNames[i],"_")[[1]][nPercModel+1]
-  }
-  
-  if (grepl("csv", respModel)){
-    respModel <- strsplit(respModel,"\\.")[[1]][1]
-  }
-  tempData$respModel <- respModel
-
-  tempData <- as.data.frame(tempData)
-  
-  # converts varaibles to characters to be able to bind the data frames
-  columns_to_convert <- c("stimPairLeft", "stimPairRight", "chosenPair", "otherPair")
-  tempData[columns_to_convert] <- lapply(tempData[columns_to_convert], as.character)
   
   # binding all data frames in one data frame
   simulationData <- bind_rows(simulationData, tempData)
@@ -143,7 +84,9 @@ write_csv(simulationSummary, file = paste(outputFolder, "modelling", "simulation
 simulationSummary <- read_csv(file = paste(outputFolder, "modelling", "simulationSummary.csv", sep = "/"))
 
 tempSum <- simulationSummary %>% 
-  filter(model == "CBCsimpleRW_CBCdriftDiffusionLR")
+  filter(model == "CBCsimpleRW_CBCdriftDiffusionLR") %>% 
+  select(-sim_percModel, -sim_respModel,
+         -fit_percModel, -fit_respModel)
 
 simVars <- tempSum %>% 
   select(starts_with("sim") & !ends_with("startBelief")
@@ -154,98 +97,139 @@ fitVars <- tempSum %>%
            !ends_with("NLL") & !ends_with("startingPoint")) %>% 
   names()
 
-for (j in 1:length(simVars)){
-  eval(parse(text=paste0("plot", j, " <- ggplot(tempSum, aes(x = ", simVars[j],
-                         ", y = ", fitVars[j], ")) + geom_point(color = 'grey') + ",
-                         "geom_abline(intercept =0, color = 'grey') +",
-                         "ggtitle('", simVars[j], " vs. ", fitVars[j], "')")))
+plotList <- list()
+
+for (j in seq_along(simVars)) {
+  plotList[[j]] <- ggplot(tempSum, aes(x = .data[[simVars[j]]], y = .data[[fitVars[j]]])) +
+    geom_point(color = 'grey') +
+    geom_abline(intercept = 0, color = 'grey') +
+    #sm_statCorr() +
+    ggtitle(paste0(simVars[j], " vs. ", fitVars[j]))
 }
 
-plot1 <- plot1 +
-  sm_statCorr(label_x = 0.01, label_y = 0.95, text_size = 5) +
-  ggtitle(expression("Recovery of Learning Rate " * italic(eta))) +
+plotList[[1]] <- plotList[[1]] +
+  sm_statCorr(label_x = 0.005, label_y = 0.95, text_size = 6) +
+  ggtitle(expression("learning Rate " * italic(eta))) +
   xlab(expression("simulated " * italic(eta))) +
   ylab(expression("recovered " * italic(eta))) +
   jtools::theme_apa(remove.y.gridlines = F, legend.pos = "none") +
   scale_y_continuous(expand = c(0, 0), limits = c(0, 1)) +
   scale_x_continuous(expand = c(0, 0), limits = c(0, 1)) +
-  theme(text = element_text(size = 8), 
-        plot.background = element_blank())
+  theme(#text = element_text(size = 25),  # Increases all text
+    axis.title.y = element_text(size = 20), # Axis titles
+    axis.title.x = element_text(size = 20), # Axis titles
+    axis.text.y = element_text(size = 20), # Axis titles
+    axis.text.x = element_text(size = 20), # Axis titles
+    legend.text = element_text(size = 20),  # Legend text
+    strip.text.x = element_text(size=20),
+    plot.title = element_text(size=20),
+    legend.position = "none",
+    plot.background = element_blank())
 
-plot2 <- plot2 +
-  sm_statCorr(label_x = 0.31, label_y = 1.05, text_size = 5) +
-  ggtitle(expression("Recovery of Non-decision Time " * italic(tau))) +
+plotList[[2]] <- plotList[[2]] +
+  sm_statCorr(label_x = 0.3135, label_y = 2.865, text_size = 6) +
+  ggtitle(expression("Non-decision time " * italic(tau))) +
   xlab(expression("simulated " * italic(tau))) +
   ylab(expression("recovered " * italic(tau))) +
   jtools::theme_apa(remove.y.gridlines = F, legend.pos = "none") +
-  scale_y_continuous(expand = c(0, 0), limits = c(0.3, 1.1)) +
-  scale_x_continuous(expand = c(0, 0), limits = c(0.3, 1.1)) +
-  theme(text = element_text(size = 8), 
-        plot.background = element_blank())
+  scale_y_continuous(expand = c(0, 0), limits = c(0.1, 3.1)) +
+  scale_x_continuous(expand = c(0, 0), limits = c(0.1, 3.1)) +
+  theme(#text = element_text(size = 25),  # Increases all text
+    axis.title.y = element_text(size = 20), # Axis titles
+    axis.title.x = element_text(size = 20), # Axis titles
+    axis.text.y = element_text(size = 20), # Axis titles
+    axis.text.x = element_text(size = 20), # Axis titles
+    legend.text = element_text(size = 20),  # Legend text
+    strip.text.x = element_text(size=20),
+    plot.title = element_text(size=20),
+    legend.position = "none",
+    plot.background = element_blank()
+  )
 
-plot3 <- plot3 +
-  sm_statCorr(label_x = 0.1, label_y = 13.5, text_size = 5) +
-  ggtitle(expression("Recovery of Drift Weight " * italic(v[mod]))) +
+plotList[[3]] <- plotList[[3]] +
+  sm_statCorr(label_x = 0.075, label_y = 14.25, text_size = 6) +
+  ggtitle(expression("Drift weight " * italic(v[mod]))) +
   xlab(expression("simulated " * italic(v[mod]))) +
   ylab(expression("recovered " * italic(v[mod]))) +
   jtools::theme_apa(remove.y.gridlines = F, legend.pos = "none") +
   scale_y_continuous(expand = c(0, 0), limits = c(0, 15)) +
   scale_x_continuous(expand = c(0, 0), limits = c(0, 15)) +
-  theme(text = element_text(size = 8), 
-        plot.background = element_blank())
+  theme(#text = element_text(size = 25),  # Increases all text
+    axis.title.y = element_text(size = 20), # Axis titles
+    axis.title.x = element_text(size = 20), # Axis titles
+    axis.text.y = element_text(size = 20), # Axis titles
+    axis.text.x = element_text(size = 20), # Axis titles
+    legend.text = element_text(size = 20),  # Legend text
+    strip.text.x = element_text(size=20),
+    plot.title = element_text(size=20),
+    legend.position = "none",
+    plot.background = element_blank()
+  )
 
-plot4 <- plot4 +
-  sm_statCorr(label_x = 1.1, label_y = 4.75, text_size = 5) +
-  ggtitle(expression("Recovery of Boundary " * italic(a))) +
+plotList[[4]] <- plotList[[4]] +
+  sm_statCorr(label_x = 1.02, label_y = 4.8, text_size = 6) +
+  ggtitle(expression("Boundary " * italic(a))) +
   xlab(expression("simulated " * italic(a))) +
   ylab(expression("recovered " * italic(a))) +
   jtools::theme_apa(remove.y.gridlines = F, legend.pos = "none") +
   scale_y_continuous(expand = c(0, 0), limits = c(1, 5)) +
   scale_x_continuous(expand = c(0, 0), limits = c(1, 5)) +
-  theme(text = element_text(size = 8), 
-        plot.background = element_blank())
+  theme(#text = element_text(size = 25),  # Increases all text
+    axis.title.y = element_text(size = 20), # Axis titles
+    axis.title.x = element_text(size = 20), # Axis titles
+    axis.text.y = element_text(size = 20), # Axis titles
+    axis.text.x = element_text(size = 20), # Axis titles
+    legend.text = element_text(size = 20),  # Legend text
+    strip.text.x = element_text(size=20),
+    plot.title = element_text(size=20),
+    legend.position = "none",
+    plot.background = element_blank()
+  ) 
 
-g <- ggarrange(plot1, plot2, plot3, plot4, ncol = 2, nrow = 2, align = "hv",
-               widths = c(0.9, 0.9), heights = c(1, 1)) 
+g <- ggarrange(plotlist = plotList, 
+               ncol = 2, nrow = 2, align = "hv",
+               widths = c(0.9, 0.9), heights = c(1, 1)) + 
+  theme(plot.background = element_rect(fill = "white", color = NA))
+
+g
 
 finalPlot <- g + 
   theme(plot.background = element_rect(fill = "white", color = NA))
 finalPlot
-ggsave(filename=paste0(outputFolder, "/figures/ParameterRecoveryDDMn.png"),
+
+ggsave(filename=paste0(outputFolder, "/figures/ParameterRecoveryDDM.svg"),
        finalPlot, 
-       width = 19, height = 19,  units = "cm")
+       width = 1.2*19, height = 1.2*19,  units = "cm")
+
+ggsave(filename=paste0(outputFolder, "/figures/ParameterRecoveryDDMn.tif"),
+       finalPlot, 
+       width = 1.2*19, height = 1.2*19,  units = "cm")
 
 corr_matrix <- cor(tempSum[, c(simVars, fitVars)])
 corr_matrix[lower.tri(corr_matrix, diag = T)] <- NA
 
 ggcorrplot::ggcorrplot(corr_matrix,
-                       lab = TRUE,  outline.color = "light grey", lab_col = "white") +
+                       lab = TRUE,  outline.color = "light grey", lab_col = "white",
+                       #colors = viridis(2, option = "viridis"),
+                       #title = "Correlation Plot for Simulated and Recovered Parameter Values"
+) +
   scale_fill_gradientn(colors = viridis(256, option = 'viridis', direction = -1)) +
   theme_minimal() +  # Minimal theme for clean background
   theme(axis.title = element_blank(),   # Remove axis titles
         axis.text.x = element_text(angle = 45, hjust = 1), 
+        axis.text.y = element_text(angle = 45, hjust = 1), 
         axis.ticks = element_blank(),    # Remove axis ticks
         panel.grid = element_blank(),
         legend.position = "right",
         text = element_text(size = 15))   # Remove gridlines
 
-ggsave(paste0(outputFolder, "/figures/CorrelationSimFitDDMn.png"),
-       width = 19, height = 19,  units = "cm")
 
-# check NLL for min/max ----
-simulationSummaryShort <- simulationSummary %>% 
-  filter(!is.na(fit_delta1), !is.na(fit_NLL), !is.na(fit_alpha1))
+ggsave(paste0(outputFolder, "/figures/CorrelationSimFitDDM.svg"),
+       width = 0.85*19, height = 0.6*19,  units = "cm")
 
-plot(simulationSummary$fit_delta1, simulationSummary$fit_NLL)
-plot(simulationSummary$fit_delta2, simulationSummary$fit_NLL)
+ggsave(paste0(outputFolder, "/figures/CorrelationSimFitDDMn.tif"),
+       width = 0.85*19, height = 0.6*19,  units = "cm")
 
-ggplot(simulationSummary, aes(fit_delta1, fit_beta)) +
-  geom_point(aes(color = fit_NLL, size = fit_NLL))
-
-lattice::cloud(fit_NLL ~ fit_alpha1 + fit_delta1, data = simulationSummaryShort)
-plot_ly(data= simulationSummary, x = simulationSummary$fit_alpha1, y = simulationSummary$fit_delta1, 
-        z = simulationSummary$fit_NLL, type = "surface") %>% 
-  add_surface()
 
 # Clean up work space -------------------------------------
 ##########################################################

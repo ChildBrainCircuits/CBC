@@ -15,6 +15,18 @@ load(file.path(outputFolder, "demo.RData"))
 table(demo$EHI_handedness)
 
 ## table with demographics test ----
+demo <- demo %>% 
+  mutate(ageGroup = case_when(
+    age > 5.5  & age <= 8.0   ~ '5.7-8.0',
+    age > 8.0  & age <= 10.5  ~ '8.1-10.5',
+    age > 10.5  & age <= 13.0 ~ '10.6-13.0'),
+    ageGroup = factor(ageGroup, 
+                      levels = c('5.7-8.0', '8.1-10.5', '10.6-13.0'),
+                      ordered = T)
+  )
+
+demoTable <- creatDemoTable(demo, c("ageGroup"))
+
 demoTable <- creatDemoTable(demo, c("auswahl_vp"))
 
 demoTableShort <- demoTable %>% 
@@ -32,12 +44,8 @@ meanOmOutl <- expInfo %>%
 meanPerformance <- behData %>% 
   group_by(ID, modality) %>% 
   summarise(meanAcc = mean(trials_runs.correct_answer, na.rm=T),
-            # sdAcc = sd(trials_runs.correct_answer, na.rm=T),
-            # iqrAcc = IQR(trials_runs.correct_answer, na.rm=T),
             meanRT = mean(response_runs.rt, na.rm = T),
-            # sdRT = sd(response_runs.rt, na.rm = T),
             meanRTCorr = mean(response_runs.rt[trials_runs.correct_answer==1], na.rm = T)) %>% 
-            # sdRTCorr = sd(response_runs.rt, na.rm = T)) 
   left_join(., meanOmOutl, by = join_by(ID, modality))
 
 fun <- function(x) {
@@ -94,6 +102,48 @@ tsTable <- expInfo %>%
   mutate(perc = round(n/90*100,1))
 table(expInfo$tsDifficulty, expInfo$prob.Feedback)
 
+taskDiff <- behData %>% 
+  mutate(FBaccuracy = as.numeric(trials_runs.correct_answer==trials_runs.feedback_given)) %>% 
+  group_by(ID, session, modality, prob.Feedback, tsDifficulty) %>% 
+  mutate(
+    # compare each trial to the one before it
+    repeat_consec = (secondStim == lag(secondStim)),
+    # if any TRUE in the session, mark “easy”, else “hard”
+    difficulty    = if_else(any(repeat_consec, na.rm = TRUE),
+                            "easy", "hard"),
+    #prob.Feedback = as.factor(prob.Feedback),
+  ) %>%
+  select(-repeat_consec) %>% 
+  summarise(probFB = mean(FBaccuracy, na.rm = T),
+            probTrials = 1-probFB,
+            diff = as.factor(unique(difficulty)),
+            nPosFB  = sum(trials_runs.feedback_given == 1, na.rm = TRUE),   # count of positive FB
+            nNegFB  = sum(trials_runs.feedback_given == 0, na.rm = TRUE),   # count of negative FB
+            acc = mean(trials_runs.correct_answer, na.rm = TRUE),
+            .groups = "drop") %>% 
+  left_join(., demo[,c("ID", "age")], by = join_by(ID))
+
+head(taskDiff)
+
+taskDiff %>%
+  group_by(prob.Feedback, diff) %>%
+  summarize(
+    n_sessions = n(),                                        # count of rows = sessions
+    nSubs      = length(unique(ID)),
+    meanNegFb  = mean(nNegFB),
+    meanPosFB  = mean(nPosFB),
+    mean_age   = mean(age, na.rm = TRUE),                    # average age
+    sd_age     = sd(age, na.rm = TRUE),                      # age standard deviation
+    min_age    = min(age, na.rm = TRUE),                     # youngest
+    max_age    = max(age, na.rm = TRUE),                     # oldest
+    age_range  = paste0(min_age, "–", max_age)               # e.g. “10–11”
+  ) %>%
+  ungroup() %>% 
+  arrange(desc(prob.Feedback), diff) %>% 
+  select(-min_age, -max_age) %>% 
+  nice_table() %>% 
+  print(preview = "docx")
+
 ## task performance ----
 # add age to data
 behData <- behData %>% 
@@ -130,33 +180,55 @@ behData4thsModality <- behData %>%
   left_join(., demo[,c("ID", "age")], by = join_by(ID))
 
 ## statistical analyses ----
+# performance above chance
+qbinom(0.95, size = 44, prob = 0.5) + 1 # 28/44 significant above chance
+
+ggplot(behData4thsModality, aes(x = bin, y = ACC, group = modality, color = modality)) +
+  geom_point() +
+  geom_line() +
+  geom_hline(yintercept = 0.6) +
+  facet_wrap(~ID)
+
+ACCaboveThr <- behData4thsModalitySession %>% 
+  group_by(ID) %>% 
+  reframe(binAboveThr = sum(ACC >= 28/44))
+
+ACCaboveThr %>% 
+  filter(binAboveThr < 2)
+
 ## combine fourths and modality
-lmRT <- lmer(RT ~ modality + (1|ID), data = behData4thsModality)
-summary(lmRT)
-
-lmRT3 <- lmer(RT ~ modality + bin + (1|ID), data = behData4thsModality)
-summary(lmRT3)
-
-lmRT4 <- lmer(RT ~ modality + bin + age + (1|ID), data = behData4thsModality)
-summary(lmRT4)
+step(lmer(RT ~ modality * bin * ageC +(1|ID), data = behData4thsModality))
+step(lmer(log(RT) ~ modality * bin * age +(1|ID), data = behData4thsModality))
 
 lmRT5 <- lmer(RT ~ modality + bin + age + modality:age + (1|ID), data = behData4thsModality)
 summary(lmRT5)
 
-lmRT6 <- lmer(RT ~ modality + bin + age + modality:age + bin:age + (1|ID), data = behData4thsModality)
-summary(lmRT6)
+res <- residuals(lmRT5)
+qqnorm(res); qqline(res, col = "blue")
+shapiro.test(res) # non-normality
+hist(res,
+     breaks = 30,
+     main   = "Histogram of LMM residuals",
+     xlab   = "Residual",
+     border = "gray")
+plot(DHARMa::simulateResiduals(lmRT5))
 
-lmRT7 <- lmer(RT ~ modality + bin + age + modality:age + bin:age + modality:bin + (1|ID), data = behData4thsModality)
-summary(lmRT7)
+lmRT5log <- lmer(log(RT) ~ modality + bin + age + modality:age + (1|ID), data = behData4thsModality)
+res2 <- residuals(lmRT5log)
+qqnorm(res2); qqline(res2, col = "blue")
+shapiro.test(res2) # non-normality
+hist(res2,
+     breaks = 30,
+     main   = "Histogram of LMM residuals (log transformed)",
+     xlab   = "Residual",
+     border = "gray")
+plot(DHARMa::simulateResiduals(lmRT5log))
 
-lmRT8 <- lmer(RT ~ modality + bin + age + modality:age + bin:age + modality:bin + modality:bin: age + (1|ID), data = behData4thsModality)
-summary(lmRT8)
-
-anova(lmRT, lmRT3, lmRT4, lmRT5, lmRT6, lmRT7, lmRT8) #lmRT5
+summary(lmRT5)
+summary(lmRT5log)
 
 anova(lmRT5)
 report(anova(lmRT5))
-summary(lmRT5)
 
 report_text(lmRT5)
 lmTable <- nice_table(as.data.frame(report_table(lmRT5)),
@@ -177,30 +249,18 @@ lmPHTable
 print(lmPHTable, preview = "docx")
 
 ## Accuracies
-lmACC <- lmer(ACC ~ modality + (1|ID), data = behData4thsModality)
-summary(lmRT)
+lmACC8 <- lmer(ACC ~ modality + bin + age + modality:age + bin:age + modality:bin + modality:bin: age + (1|ID), data = behData4thsModality)
 
-lmACC3 <- lmer(ACC ~ modality + bin + (1|ID), data = behData4thsModality)
-summary(lmACC3)
-
-lmACC4 <- lmer(ACC ~ modality + bin + age + (1|ID), data = behData4thsModality)
-summary(lmACC4)
+lmerTest::step(lmACC8)
 
 lmACC5 <- lmer(ACC ~ modality + bin + age + modality:age +(1|ID) , data = behData4thsModality)
-summary(lmACC5)
 
-lmACC6 <- lmer(ACC ~ modality + bin + age + modality:age + bin:age  + (1|ID), data = behData4thsModality)
-summary(lmACC6)
+behData4thsModality$corrAge <- behData4thsModality$age - mean(behData4thsModality$age)
 
-lmACC7 <- lmer(ACC ~ modality + bin + age + modality:age + bin:age + modality:bin + (1|ID), data = behData4thsModality)
-summary(lmACC7)
-
-lmACC8 <- lmer(ACC ~ modality + bin + age + modality:age + bin:age + modality:bin + modality:bin: age + (1|ID), data = behData4thsModality)
-summary(lmACC8)
-
-anova(lmACC, lmACC3, lmACC4, lmACC5, lmACC6, lmACC7, lmACC8) #lmACC5
+lmACC5.1 <- lmer(ACC ~ modality * corrAge + bin +(1|ID) , data = behData4thsModality)
 
 summary(lmACC5)
+summary(lmACC5.1)
 anova(lmACC5)
 report(anova(lmACC5))
 as.report_text(report(anova(lmACC5)), summary = T)
@@ -229,6 +289,30 @@ meanRTFourthsPlot <- behData %>%
             mACC = mean(trials_runs.correct_answer, na.rm=T)) %>% 
   ungroup() %>% 
   mutate(modality = if_else(modality == "av", "AV", "TV"))
+
+medAcc4thbin <- behData4thsModality %>% 
+  filter(bin == 4) %>% 
+  group_by(modality) %>% 
+  summarise(mACC = mean(ACC)*100,
+            mdACC = round(median(ACC)*100,2))
+
+behData %>% 
+  group_by(modality, bin) %>% 
+  summarise(mRT = mean(response_runs.rt[trials_runs.correct_answer==1], na.rm = T),
+            mACC = mean(trials_runs.correct_answer, na.rm=T)) %>% 
+  ungroup() %>% 
+  mutate(modality = if_else(modality == "av", "AV", "TV"))
+
+meanPerformance <- behData %>% 
+  group_by(ID, modality) %>% 
+  summarise(meanAcc = mean(trials_runs.correct_answer, na.rm=T),
+            # sdAcc = sd(trials_runs.correct_answer, na.rm=T),
+            # iqrAcc = IQR(trials_runs.correct_answer, na.rm=T),
+            meanRT = mean(response_runs.rt, na.rm = T),
+            # sdRT = sd(response_runs.rt, na.rm = T),
+            meanRTCorr = mean(response_runs.rt[trials_runs.correct_answer==1], na.rm = T)) %>% 
+  # sdRTCorr = sd(response_runs.rt, na.rm = T)) 
+  left_join(., meanOmOutl, by = join_by(ID, modality))
 
 behData4thsModality <- behData4thsModality %>% 
   mutate(modality = if_else(modality == "av", "AV", "TV"))

@@ -7,6 +7,13 @@
 finalSample <- read_csv(file = file.path(inputFolder, 'outputfMRIv3AVeTV.csv'))  %>% 
   rename(logfile = "logfile.x")
 
+outputSessNr <- read_csv(file = file.path(inputFolder, 'outputSessNR.csv'))
+
+finalSample <- finalSample %>% 
+  left_join(.,outputSessNr %>% select(ID, run, sessNR), by = join_by(ID, run))
+
+write_csv(finalSample, file.path(inputFolder, 'outputfMRIv3AVeTV.csv'))
+
 finalSample %>% 
   group_by(ID) %>% 
   count(ID) %>% 

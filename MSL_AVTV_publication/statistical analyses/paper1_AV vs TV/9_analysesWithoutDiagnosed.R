@@ -173,264 +173,141 @@ betasSubPE <- extractedBetaslongShort %>%
   filter(mask == "PE_uniform",
          hemisphere != "wholeBrain") %>% 
   group_by(ID, mask, modality, label, hemisphere, age, learningRate) %>% 
-  summarise(betaValues = mean(betaValues))
+  summarise(betaValues = mean(betaValues)) %>% 
+  ungroup()
 
-min(betasSubPE$betaValues) # -8.121
-max(betasSubPE$betaValues) # 5.689
+PEmin <- floor(min(betasSubPE$betaValues)) # -4.245
+PEmax <- ceiling(max(betasSubPE$betaValues)) # 2.295
 
 betasPE <- extractedBetaslongShort %>% 
   filter(mask == "PE_uniform",
-         hemisphere == "wholeBrain")
+         hemisphere == "wholeBrain") %>% 
+  ungroup()
 
-p_values_PE <- c()
+## analyes ----
 combined_anovas_PE <- tibble()
 
-PELM2 <- lmer(betaValues ~ modality * age + (1|ID), betasPE)
+betasPE <- betasPE %>%
+  mutate(age_c = age - mean(age))
+
+PELM2 <- lmer(betaValues ~ modality * age_c + (1|ID), betasPE,
+              contrasts = list(modality = contr.sum))
 
 summary(PELM2)
-report(PELM2)
-
 anova(PELM2)
+
+effSizes <- effectsize::eta_squared(anova(PELM2, type = 3), partial = TRUE) %>% 
+  as_tibble() %>% 
+  select(Parameter, Eta2_partial, CI_low, CI_high) 
+
 combined_anovas_PE <-  anova(PELM2) %>% 
   broom.mixed::tidy(effects = "fixed") %>% 
-  mutate(Model = "Whole ROI")
-
-p_values_PE <- c(p_values_PE, summary(PELM2)$coefficients[,"Pr(>|t|)"]) 
-
-lmTable <- nice_table(as.data.frame(report_table(PELM2)),
-                      title = 'ABC', note = 'ABC', 
-                      #col.format.custom = c(2:6, 11:13), format.custom = 'fun',
-                      highlight = T)
-lmTable
-print(lmTable, preview = 'docx')
+  mutate(Model = "Whole ROI") %>%
+  left_join(effSizes, by = c("term" = "Parameter"))
 
 ggplot(betasPE, aes(age, betaValues, colour=modality, group=modality)) +
-  geom_point() +
+  geom_point(alpha=0.6) +
   geom_smooth(method='lm') +
   scale_color_manual(values = viridis(n=2, begin = 0.2, end = 0.8)) +
-  jtools::theme_apa(remove.y.gridlines = F) + scale_y_continuous(expand = c(0, 0)) +
-  theme(text = element_text(size = 25))
+  ggtitle('RPE network ROI') +
+  ylab("beta values") +
+  annotate("text", label = "paste('modality ', italic(p), ' = .005**')",
+           parse = TRUE, x = 5.8, y = -2.6,
+           hjust = 0, vjust = 0, color = "blue", size = 7.5) +
+  annotate("text", label = "paste('age ', italic(p), ' = .002**')",
+           parse = TRUE, x = 5.8, y = -3.7,
+           hjust = 0, vjust = 0, color = "blue", size = 7.5) +
+  annotate("text", label = "paste('age × modality ', italic(p), ' = .046*')",
+           parse = TRUE, x = 5.8, y = -4.8,
+           hjust = 0, vjust = 0, color = "blue", size = 7.5) +
+  jtools::theme_apa(remove.y.gridlines = F) + 
+  jtools::theme_apa(remove.y.gridlines = F) + scale_y_continuous(expand = c(0, 0), limits = c(PEmin, PEmax)) +
+  theme(#text = element_text(size = 25),  # Increases all text
+    axis.title.y = element_text(size = 22), # Axis titles
+    axis.title.x = element_text(size = 22), # Axis titles
+    axis.text.y = element_text(size = 20), # Axis titles
+    axis.text.x = element_text(size = 20), # Axis titles
+    legend.text = element_text(size = 22),  # Legend text
+    strip.text.x = element_text(size=22),
+    plot.title = element_text(size=22),
+    legend.position = "none"
+  ) 
 
-ggsave(file.path(outputFolder, 'figures', 'ROIPEBeta_Subgroup.png'),
-       height = 15, width = 24, units = "cm")
+# ggsave(file.path(outputFolder, 'figures', 'ROIPEBeta_rev1_ICA.svg'),
+#        height = 8, width = 12.8, units = "cm")
+# ggsave(file.path(outputFolder, 'figures', 'ROIPEBeta_rev1_ICA.tif'),
+#        height = 8, width = 12.8, units = "cm")
 
-# effects in subclusters ------------------------------------------
-levels(betasSubPE$label)
+## effects in subclusters ------------------------------------------
+clusters <- unique(betasSubPE$label)
+hemispheres <- unique(betasSubPE$hemisphere)
 
-# anterior insula left
+plots_PE <- list()
+
+for (cluster in clusters) {
+  for (hem in hemispheres) {
+    # Filter the data for the current cluster and hemisphere
+    betasSubPE1 <- betasSubPE %>% 
+      filter(label == cluster, hemisphere == hem) %>% 
+      mutate(age_c = age - mean(age))
+    
+    if (nrow(betasSubPE1) == 0) {
+      next
+    }
+    
+    SubLM <- lmer(betaValues ~ modality * age_c + (1|ID), betasSubPE1,
+                  contrasts = list(modality = contr.sum))
+    
+    effSizesPE <- effectsize::eta_squared(anova(SubLM, type = 3), partial = TRUE) %>% 
+      as_tibble() %>% 
+      select(Parameter, Eta2_partial, CI_low, CI_high) 
+    
+    combined_anovas_PE <-  anova(SubLM) %>% 
+      broom.mixed::tidy(effects = "fixed") %>% 
+      mutate(Model = paste(cluster, hem)) %>% 
+      left_join(effSizesPE, by = c("term" = "Parameter")) %>% 
+      bind_rows(combined_anovas_PE, .)
+    
+    
+    plot  <- ggplot(betasSubPE1, aes(age, betaValues, colour=modality, group=modality)) +
+      geom_point(alpha=0.6) +
+      geom_smooth(method='lm', aes(linetype = modality), linewidth = 1.2) +
+      ggtitle(paste(cluster, hem)) +
+      scale_color_manual(values = viridis(n=2, begin = 0.2, end = 0.8)) +
+      jtools::theme_apa(remove.y.gridlines = F) + 
+      scale_y_continuous(expand = c(0, 0), limits = c(PEmin, PEmax)) +
+      theme(text = element_text(size = 20))
+    
+    # Add plot to the list
+    plots_PE[[paste(cluster, hem)]] <- plot
+  }
+}
+
+combined_anovas_PE_corr <- combined_anovas_PE %>% 
+  #filter(Model != 'Whole ROI') %>% 
+  rename(p_uncorr = p.value) %>% 
+  mutate(p.value = p.adjust(p_uncorr, method = "BH"),
+         p_uncorr = sprintf("%.3f", p_uncorr))  %>% 
+  select(Model, term, sumsq, meansq, NumDF, DenDF, statistic, p_uncorr, p.value, Eta2_partial, CI_low, CI_high)
+
+nice_table(combined_anovas_PE_corr, highlight = TRUE,
+           title = "RPE: Anova Main and Interaction effects") %>% 
+  print(., preview = 'docx')
+
+ggarrange(plotlist = plots_PE, ncol = 3, nrow = 3,
+          common.legend = TRUE)
+
+
 betasSubPE1 <- betasSubPE %>% 
-  filter(label == "anterior insula", hemisphere == "left")
+  filter(label == "anterior insula", hemisphere == "left") %>% 
+  mutate(age_c = age - mean(age))
 
-SubLM <- lmer(betaValues ~ modality * age + (1|ID), betasSubPE1)
+SubLM <- lmer(betaValues ~ age_c * modality + (1|ID), betasSubPE1,
+              contrasts = list(modality = contr.sum))
+
+lmerTest::step()
 summary(SubLM)
-anova(SubLM)
-combined_anovas_PE <-  anova(SubLM) %>% 
-  broom.mixed::tidy(effects = "fixed") %>% 
-  mutate(Model = "Anterior Insula left") %>% 
-  bind_rows(combined_anovas_PE, .)
 
-p_values_PE <- c(p_values_PE, summary(SubLM)$coefficients[,"Pr(>|t|)"]) 
-
-lmTable <- nice_table(as.data.frame(report_table(SubLM)),
-                      title = 'Left Anterior Insula', note = 'ABC', 
-                      highlight = T)
-lmTable
-
-p1 <- ggplot(betasSubPE1, aes(age, betaValues, colour=modality, group=modality)) +
-  geom_point(alpha=0.6) +
-  geom_smooth(method='lm', aes(linetype = modality)) +
-  scale_color_manual(values = viridis(n=2, begin = 0.2, end = 0.8)) +
-  ggtitle('Left Anterior Insula') + ylim(-9,3) +
-  jtools::theme_apa(remove.y.gridlines = F) + scale_y_continuous(expand = c(0, 0), limits = c(-9, 7)) +
-  theme(text = element_text(size = 20))
-p1
-
-# anterior insula right
-betasSubPE1 <- betasSubPE %>% 
-  filter(label == "anterior insula", hemisphere == "right")
-
-SubLM <- lmer(betaValues ~ modality * age + (1|ID), betasSubPE1)
-summary(SubLM)
-anova(SubLM)
-combined_anovas_PE <-  anova(SubLM) %>% 
-  broom.mixed::tidy(effects = "fixed") %>% 
-  mutate(Model = "Anterior Insula right") %>% 
-  bind_rows(combined_anovas_PE, .)
-
-p_values_PE <- c(p_values_PE, summary(SubLM)$coefficients[,"Pr(>|t|)"]) 
-
-lmTable <- nice_table(as.data.frame(report_table(SubLM)),
-                      title = 'Right Anterior Insula', note = 'ABC', 
-                      highlight = T)
-lmTable
-
-p2 <- ggplot(betasSubPE1, aes(age, betaValues, colour=modality, group=modality)) +
-  geom_point(alpha=0.6) +
-  geom_smooth(method='lm', aes(linetype = modality)) +
-  scale_color_manual(values = viridis(n=2, begin = 0.2, end = 0.8)) +
-  ggtitle('Right Anterior Insula') +
-  jtools::theme_apa(remove.y.gridlines = F) + scale_y_continuous(expand = c(0, 0), limits = c(-9, 7)) +
-  theme(text = element_text(size = 20))
-p2
-
-# precentral gyrus left
-betasSubPE1 <- betasSubPE %>% 
-  filter(label == "precentral gyrus", hemisphere == "left")
-
-SubLM <- lmer(betaValues ~ modality * age + (1|ID), betasSubPE1)
-summary(SubLM)
-anova(SubLM)
-combined_anovas_PE <-  anova(SubLM) %>% 
-  broom.mixed::tidy(effects = "fixed") %>% 
-  mutate(Model = "Precentral Gyrus left") %>% 
-  bind_rows(combined_anovas_PE, .)
-
-p_values_PE <- c(p_values_PE, summary(SubLM)$coefficients[,"Pr(>|t|)"]) 
-
-lmTable <- nice_table(as.data.frame(report_table(SubLM)),
-                      title = 'Left Precentral Gyrus', note = 'ABC', 
-                      highlight = T)
-lmTable
-
-p3 <- ggplot(betasSubPE1, aes(age, betaValues, colour=modality, group=modality)) +
-  geom_point(alpha=0.6) +
-  geom_smooth(method='lm', aes(linetype = modality)) +
-  scale_color_manual(values = viridis(n=2, begin = 0.2, end = 0.8)) +
-  ggtitle('Left Precentral Gyrus') +
-  jtools::theme_apa(remove.y.gridlines = F) + scale_y_continuous(expand = c(0, 0), limits = c(-9, 7)) +
-  theme(text = element_text(size = 20))
-p3
-
-# right
-betasSubPE1 <- betasSubPE %>% 
-  filter(label == "precentral gyrus", hemisphere == "right")
-
-SubLM <- lmer(betaValues ~ modality * age + (1|ID), betasSubPE1)
-summary(SubLM)
-anova(SubLM)
-combined_anovas_PE <-  anova(SubLM) %>% 
-  broom.mixed::tidy(effects = "fixed") %>% 
-  mutate(Model = "Precentral Gyrus right") %>% 
-  bind_rows(combined_anovas_PE, .)
-
-p_values_PE <- c(p_values_PE, summary(SubLM)$coefficients[,"Pr(>|t|)"]) 
-
-lmTable <- nice_table(as.data.frame(report_table(SubLM)),
-                      title = 'Right Precentral Gyrus', note = 'ABC', 
-                      highlight = T)
-lmTable
-
-p4 <- ggplot(betasSubPE1, aes(age, betaValues, colour=modality, group=modality)) +
-  geom_point(alpha=0.6) +
-  geom_smooth(method='lm', aes(linetype = modality)) +
-  scale_color_manual(values = viridis(n=2, begin = 0.2, end = 0.8)) +
-  ggtitle('Right Precentral Gyrus') +
-  jtools::theme_apa(remove.y.gridlines = F) + scale_y_continuous(expand = c(0, 0), limits = c(-9, 7)) +
-  theme(text = element_text(size = 20))
-p4
-
-# bilateral supplementary motor cortex
-betasSubPE1 <- betasSubPE %>% 
-  filter(label == "supplementary motor cortex")
-
-SubLM <- lmer(betaValues ~ modality * age + (1|ID), betasSubPE1)
-summary(SubLM)
-anova(SubLM)
-combined_anovas_PE <-  anova(SubLM) %>% 
-  broom.mixed::tidy(effects = "fixed") %>% 
-  mutate(Model = "Supplementary Motor Cortex bilateral") %>% 
-  bind_rows(combined_anovas_PE, .)
-
-p_values_PE <- c(p_values_PE, summary(SubLM)$coefficients[,"Pr(>|t|)"]) 
-
-lmTable <- nice_table(as.data.frame(report_table(SubLM)),
-                      title = 'Bilateral Supplementary Motor Cortex', note = 'ABC', 
-                      highlight = T)
-lmTable
-
-p5 <- ggplot(betasSubPE1, aes(age, betaValues, colour=modality, group=modality)) +
-  geom_point(alpha=0.6) +
-  geom_smooth(method='lm', aes(linetype = modality)) +
-  scale_color_manual(values = viridis(n=2, begin = 0.2, end = 0.8)) +
-  ggtitle('Bilateral Supplementary Motor Cortex') +
-  jtools::theme_apa(remove.y.gridlines = F) + scale_y_continuous(expand = c(0, 0), limits = c(-9, 7)) +
-  theme(text = element_text(size = 20))
-p5
-
-# ventral striatum left
-betasSubPE1 <- betasSubPE %>% 
-  filter(label == "ventral striatum", hemisphere == "left")
-
-SubLM <- lmer(betaValues ~ modality * age + (1|ID), betasSubPE1)
-summary(SubLM)
-anova(SubLM)
-combined_anovas_PE <-  anova(SubLM) %>% 
-  broom.mixed::tidy(effects = "fixed") %>% 
-  mutate(Model = "Ventral Striatum left") %>% 
-  bind_rows(combined_anovas_PE, .)
-
-p_values_PE <- c(p_values_PE, summary(SubLM)$coefficients[,"Pr(>|t|)"]) 
-
-lmTable <- nice_table(as.data.frame(report_table(SubLM)),
-                      title = 'Left Ventral Striatum', note = 'ABC', 
-                      highlight = T)
-lmTable
-
-p6 <- ggplot(betasSubPE1, aes(age, betaValues, colour=modality, group=modality)) +
-  geom_point(alpha=0.6) +
-  geom_smooth(method='lm', aes(linetype = modality)) +
-  scale_color_manual(values = viridis(n=2, begin = 0.2, end = 0.8)) +
-  ggtitle('Left Ventral Striatum') +
-  jtools::theme_apa(remove.y.gridlines = F) + scale_y_continuous(expand = c(0, 0), limits = c(-9, 7)) +
-  theme(text = element_text(size = 20))
-p6
-
-# right
-betasSubPE1 <- betasSubPE %>% 
-  filter(label == "ventral striatum", hemisphere == "right")
-
-SubLM <- lmer(betaValues ~ modality * age + (1|ID), betasSubPE1)
-summary(SubLM)
-anova(SubLM)
-combined_anovas_PE <-  anova(SubLM) %>% 
-  broom.mixed::tidy(effects = "fixed") %>% 
-  mutate(Model = "Ventral Striatum right") %>% 
-  bind_rows(combined_anovas_PE, .)
-
-p_values_PE <- c(p_values_PE, summary(SubLM)$coefficients[,"Pr(>|t|)"]) 
-
-lmTable <- nice_table(as.data.frame(report_table(SubLM)),
-                      title = 'Right Ventral Striatum', note = 'ABC', 
-                      highlight = T)
-lmTable
-
-p7 <- ggplot(betasSubPE1, aes(age, betaValues, colour=modality, group=modality)) +
-  geom_point(alpha=0.6) +
-  geom_smooth(method='lm', aes(linetype = modality)) +
-  scale_color_manual(values = viridis(n=2, begin = 0.2, end = 0.8)) +
-  ggtitle('Right Ventral Striatum') +
-  jtools::theme_apa(remove.y.gridlines = F) + scale_y_continuous(expand = c(0, 0), limits = c(-9, 7)) +
-  theme(text = element_text(size = 20))
-p7
-
-# adjust p-values
-adjusted_p_values_PE <- p.adjust(p_values_PE, method = "BH")
-
-msTable <- data.frame(p_uncorr = p_values_PE, p = adjusted_p_values_PE)
-
-# get effects of anovas
-combined_anovas_PE_final <- combined_anovas_PE %>% 
-  select(Model, term, NumDF, statistic, p.value) %>% 
-  rename(DF = NumDF,
-         F.Value = statistic,
-         p_uncorrected = p.value) %>% 
-  mutate(p.value = p.adjust(p_uncorrected, method = "BH")) 
-
-lmTable <- nice_table(combined_anovas_PE_final,
-                      title = 'adjusted p-values', note = 'ABC', 
-                      col.format.custom = c(5), format.custom = 'fun3',
-                      highlight = T)
-lmTable
-print(lmTable, preview = 'docx')
+mean(betasSubPE$age)
 
 
